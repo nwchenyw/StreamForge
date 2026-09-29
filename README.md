@@ -1,120 +1,133 @@
 <div align="center">
 
 # ⚡ StreamForge
-### 高性能串流影音工坊 · 跨格式轉換與智慧檔名管理工具
-**High-Performance Media Stream & Audio Processing Utility**
+### High-Performance Media Stream & Audio Processing Utility
+**Cross-Format Conversion · Smart Numbering · Conflict Resolution · Interactive CLI**
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/)
+<p align="center">
+  <a href="README.zh-TW.md"><b>繁體中文</b></a> •
+  <a href="README.md"><b>English</b></a> •
+  <a href="README.zh-CN.md"><b>简体中文</b></a> •
+  <a href="README.ja.md"><b>日本語</b></a> •
+  <a href="README.ko.md"><b>한국어</b></a> •
+  <a href="README.es.md"><b>Español</b></a> •
+  <a href="README.fr.md"><b>Français</b></a> •
+  <a href="README.de.md"><b>Deutsch</b></a>
+</p>
+
+[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
+[![i18n](https://img.shields.io/badge/Languages-8%20Supported-purple?style=for-the-badge)](code/i18n.py)
 
 <p align="center">
-  <b>支援 MP3 / MP4 切換 · 隨身碟智慧辨識 · 001 循序編號 · 目標目錄防覆蓋查重 · 失敗診斷與一鍵重試 · 內建交互式命令列 (CLI)</b>
+  <b>Supports 8 Languages · Seamless MP3 / MP4 Switching · USB Auto-Detection · 001 Numbering · Conflict Prevention · Error Diagnostics · Built-in CLI</b>
 </p>
 
 </div>
 
 ---
 
-## 🌟 核心特色 (Key Features)
+## 🌟 Key Features
 
-- 🎵 **多格式彈性切換**：
-  - **MP3 純音訊**：最高 320 kbps 高音質轉檔，自動寫入 ID3 歌曲標籤與嵌入專輯封面。
-  - **🎬 MP4 視訊影片**：支援最高畫質（1080p Full HD / 720p HD 等），自動合併高畫質視訊與音訊。
-- 💾 **USB 隨身碟與資料夾智慧檢查 (001, 002...)**：
-  - 一鍵自動偵測插入的 USB 隨身碟。
-  - 智慧檢查現有檔案編號格式，新檔案自動接續編號（如從 `016` 繼續）。
-  - 若檔案未編號，主動詢問是否自動二階段重命名為 `001 - 檔名`（適合車載音響或播放器）。
-- 🔍 **下載前目錄智慧查重**：
-  - 下載前自動掃描目標資料夾，發現同名或相同歌曲時彈窗提供 **覆蓋**、**加上編號後綴 (1)** 或 **略過**，並支援「套用到全部」。
-- ❌ **失敗詳細診斷與一鍵重試**：
-  - 自動捕捉並分析每首歌曲失敗原因（如私人影片、平台驗證、HTTP 403 限速或網路逾時）。
-  - 一鍵重試所有失敗項目，無需手動重新勾選。
-- 💻 **交互式命令列控制台 (Interactive CLI Prompt)**：
-  - 專為極客與進階玩家打造的終端操作面板，支援快速指令輸入、執行日誌串流與 `↑` / `↓` 歷史命令切換。
-- 🛡️ **反爬蟲強化與長連線機制**：
-  - 內建 iOS / Android 手機端 API 多平台模擬機制，大幅降低伺服器驗證失敗率，內建 10 次自動重試。
+- 🌐 **Comprehensive Multi-Language Support (8 Languages)**:
+  - Full interface translation for **English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, French, and German**.
+  - **Installer Language Selector**: Choose your language directly in the setup wizard.
+  - **In-App Dynamic Switcher**: Switch anytime from the top-right menu or the About dialog without restarting.
+- 🎵 **Flexible Multi-Format Conversion**:
+  - **MP3 Audio**: Up to 320 kbps high-bitrate conversion, automatic ID3 tag writing, and album artwork embedding.
+  - **🎬 MP4 Video**: Supports up to Full HD 1080p and 720p HD with automated video/audio muxing.
+- 💾 **Smart USB Drive & Folder Numbering (001, 002...)**:
+  - One-click automatic detection of inserted USB drives.
+  - Inspects existing files to automatically continue numbering sequences (e.g., resumes at `016`).
+  - Offers smart two-phase batch renaming to `001 - Title` for automotive audio systems and media players.
+- 🔍 **Pre-Download Duplicate Conflict Resolution**:
+  - Automatically scans target directories before downloading. If matching files exist, provides **Overwrite**, **Append index (1)**, or **Skip** with an "Apply to All" option.
+- ❌ **Detailed Error Diagnostics & One-Click Retry**:
+  - Catches and categorizes failures (private videos, platform bot checks, HTTP 403 throttling, timeouts).
+  - One-click retry for all failed tasks without re-adding links.
+- 💻 **Interactive CLI Terminal**:
+  - Built-in command prompt supporting keyboard navigation, streaming logs, and `↑` / `↓` command history.
+- 🛡️ **Anti-Bot Simulation & Robust Connectivity**:
+  - Emulates mobile APIs to drastically reduce server verification blocks, backed by automated retry loops.
 
 ---
 
-## 🎮 控制台指令一覽表 (CLI Commands)
+## 🎮 CLI Commands Reference
 
-您可以在工具下方的 **`💻 即時命令列狀態`** 輸入指令，完全使用鍵盤進行控制：
+You can control StreamForge completely via keyboard in the **`💻 Interactive Terminal`** at the bottom of the window:
 
-| 指令 | 簡稱/別名 | 功能說明與範例 |
+| Command | Aliases | Description & Examples |
 | :--- | :--- | :--- |
-| **`about`** | `copyright`, `team` | 顯示 StreamForge 軟體版本與智慧財產權宣告 |
-| **`help`** | `?`, `h` | 顯示所有可用指令與說明 |
-| **`add <網址>`** | `a <網址>` | 新增單曲或播放清單網址至清單中（例如：`add https://...`） |
-| **`paste`** | `p` | 自動讀取系統剪貼簿中的網址並加入 |
-| **`list`** | `ls` | 列出目前清單中所有歌曲、時長、勾選與下載狀態 |
-| **`select <範圍>`** | `sel` | 選取歌曲：`select all`、`select none`、`select 1 3 5`、`select 1-5` |
-| **`del <範圍>`** | `rm` | 刪除歌曲：`del 2`、`del 1 3`、`del all` |
-| **`start`** | `dl`, `run` | 啟動批次下載所有已勾選的歌曲 |
-| **`pause`** | - | 暫停當前下載任務 |
-| **`resume`** | - | 恢復已暫停的下載任務 |
-| **`cancel`** | `stop` | 取消當前下載任務（保留已完成檔案） |
-| **`retry`** | `r` | 重新嘗試下載所有標記為失敗的歌曲 |
-| **`format <格式>`** | `fmt` | 切換格式：`format mp3` 或 `format mp4` |
-| **`quality <值>`** | `q` | 設定品質：音質 `quality 320` 或畫質 `quality 1080`、`quality best` |
-| **`dir [路徑]`** | `cd` | 查看或切換下載儲存路徑，例如：`dir D:\MyMusic` |
-| **`usb`** | - | 自動辨識插上的 USB 隨身碟並切換下載目錄 |
-| **`check`** | - | 檢查目標資料夾是否符合 001 編號格式 |
-| **`number <on/off>`**| `num` | 開啟或關閉檔名 001 前綴序號功能 |
-| **`open`** | - | 在檔案總管開啟當前下載儲存資料夾 |
-| **`status`** | - | 顯示目前系統設定、清單與下載狀態摘要 |
-| **`clear`** | `cls` | 清除命令列控制台輸出畫面 |
-| **`exit`** | `quit` | 關閉應用程式 |
+| **`about`** | `copyright`, `team` | Display version, developers, and copyright disclaimer |
+| **`help`** | `?`, `h` | Show all available commands and syntax |
+| **`add <url>`** | `a <url>` | Add a single video/audio track or playlist to queue |
+| **`paste`** | `p` | Automatically read URL from system clipboard and add to queue |
+| **`list`** | `ls` | List all queue items, duration, and download statuses |
+| **`select <range>`** | `sel` | Select items: `select all`, `select none`, `select 1 3 5`, `select 1-5` |
+| **`del <range>`** | `rm` | Remove items: `del 2`, `del 1 3`, `del all` |
+| **`start`** | `dl`, `run` | Start downloading all selected items |
+| **`pause`** | - | Pause active downloads |
+| **`resume`** | - | Resume paused downloads |
+| **`cancel`** | `stop` | Cancel active downloads (retains completed files) |
+| **`retry`** | `r` | Retry all failed items in the queue |
+| **`format <fmt>`** | `fmt` | Switch format: `format mp3` or `format mp4` |
+| **`quality <val>`** | `q` | Set quality: `quality 320` or video `quality 1080`, `quality best` |
+| **`dir [path]`** | `cd` | View or change destination folder, e.g.: `dir D:\Music` |
+| **`usb`** | - | Automatically detect USB drive and switch download directory |
+| **`check`** | - | Inspect whether destination folder conforms to 001 numbering |
+| **`number <on/off>`**| `num` | Enable or disable filename 001 prefix sequencing |
+| **`open`** | - | Open the current download folder in Windows File Explorer |
+| **`status`** | - | Show system configuration and queue summary |
+| **`clear`** | `cls` | Clear terminal console output |
+| **`exit`** | `quit` | Exit application |
 
 ---
 
-## 🚀 下載與安裝 (Installation & Releases)
+## 🚀 Installation & Releases
 
-### 1. Windows 安裝程式 (推薦)
-前往 [Releases 頁面](https://github.com/nwchenyw/StreamForge/releases) 下載最新版的 **`StreamForge-Setup-v1.0.0.exe`**：
-- **自選安裝位置**：可自由安裝於預設系統路徑、任意硬碟目錄或隨身碟。
-- **捷徑設定**：安裝時可自由勾選是否建立桌面捷徑與開始功能表捷徑。
-- **自動更新檢查**：安裝時與 App 內皆可勾選「啟動時自動檢查最新版本」。
-- **純淨無腳本**：標準 Windows 原生安裝精靈，包含乾淨的解除安裝程式（可在「設定 > 應用程式」一鍵移除）。
+### 1. Windows Native Installer (Recommended)
+Download the latest **`StreamForge-Setup-v1.0.0.exe`** from the [GitHub Releases](https://github.com/nwchenyw/StreamForge/releases) page:
+- **8-Language Setup Wizard**: Select your preferred language right at launch.
+- **Custom Destination**: Install to default Program Files, any secondary drive, or directly to a portable USB drive.
+- **Shortcut Configuration**: Optional Desktop and Start Menu shortcuts.
+- **Automatic Updates**: Enable startup update check during installation or later in settings.
+- **Clean & Scriptless**: Standard Windows native installer with a clean uninstaller accessible via Windows Settings.
 
-### 2. 免安裝綠色版 (Portable)
-若偏好無須安裝，亦可下載 `StreamForge-v1.0.0-Portable.zip`，解壓縮後直接執行 `StreamForge.exe`。
-
-### 3. 從原始碼執行 (開發者模式)
+### 2. Run from Source (Developer Mode)
 ```bash
-# 複製儲存庫
+# Clone the repository
 git clone https://github.com/nwchenyw/StreamForge.git
 cd StreamForge
 
-# 安裝依賴套件
+# Install dependencies
 pip install -r code/requirements.txt
 
-# 啟動應用程式
+# Launch application
 python code/gui_app.py
 ```
 
-### 4. 自行編譯 Windows 安裝程式
-本專案採用 **Inno Setup** 與 **PyInstaller** 雙重打包流程：
+### 3. Build Windows Installer Locally
 ```bash
-# 步驟 1: 生成執行目錄
-python -m PyInstaller --onedir --noconsole --name "StreamForge" --collect-all customtkinter --add-data "code/ffmpeg_bin;ffmpeg_bin" code/gui_app.py
+# Step 1: Package application
+python -m PyInstaller --onedir --noconsole --name "StreamForge" --collect-all customtkinter --add-data "code/ffmpeg_bin;ffmpeg_bin" code/gui_app.py --clean -y
 
-# 步驟 2: 編譯安裝程式
-iscc installer.iss
-# 產出檔案位於 dist/StreamForge-Setup-v1.0.0.exe
+# Step 2: Compile Inno Setup installer
+iscc .github/installer/installer.iss
+# Output is saved to installer/StreamForge-Setup-v1.0.0.exe
 ```
 
 ---
 
-## ⚖️ 智慧財產權與法律免責聲明 (Legal Disclaimer)
+## ⚖️ Intellectual Property & Legal Disclaimer
 
-### 版權宣告 (Copyright Notice)
+### Copyright Notice
 **© 2026 The StreamForge Team & Contributors. All Rights Reserved.**  
-本專案採用 **[MIT License](LICENSE)** 授權開源。
+This project is licensed under the **[MIT License](LICENSE)**.
 
-### 免責聲明 (Disclaimer)
-1. 本專案為開源軟體，開發目的僅供**個人學習、研究、合理使用 (Fair Use) 以及備份個人合法內容**。
-2. 本專案**不提供、不儲存、亦不分發**任何受著作權保護之媒體內容，所有下載數據均由使用者所提供之網路位址即時串流處理。
-3. 使用者在使用本工具時，應自覺遵守所在國家/地區之智慧財產權法規及各影音平台之使用者服務條款。
-4. 任何因不當使用、商業營利或侵犯他人智慧財產權所衍生之法律責任，均由使用者自行承擔，開發團隊不負任何連帶保證或法律責任。
+### Disclaimer
+1. This tool is open-source software intended strictly for **personal learning, research, fair use, and personal authorized backups**.
+2. StreamForge **does not host, store, cache, or distribute** copyrighted media. All media streams are processed locally and directly from URLs provided by the user.
+3. Users are responsible for complying with applicable copyright laws and streaming service Terms of Service in their jurisdiction.
+4. The developers assume no liability for misuse, commercial redistribution, or copyright infringement.

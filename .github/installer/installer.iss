@@ -52,6 +52,10 @@ Name: "chinesetraditional"; MessagesFile: ".github\installer\languages\ChineseTr
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: ".github\installer\languages\ChineseSimplified.isl"
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
+Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [CustomMessages]
 chinesetraditional.CreateDesktopIcon=建立桌面捷徑 (&Create desktop shortcut)
@@ -73,6 +77,26 @@ japanese.CreateDesktopIcon=デスクトップにショートカットを作成�
 japanese.LaunchProgram=StreamForge を今すぐ起動
 japanese.AutoUpdate=起動時に最新バージョンの更新を自動確認する (Enable auto-check for updates)
 japanese.SettingsGroup=設定 (Settings):
+
+korean.CreateDesktopIcon=바탕 화면 바로가기 만들기 (&Create desktop shortcut)
+korean.LaunchProgram=지금 StreamForge 실행
+korean.AutoUpdate=시작 시 최신 버전 자동 업데이트 확인 (Enable auto-check for updates)
+korean.SettingsGroup=기본 설정 (Settings):
+
+spanish.CreateDesktopIcon=Crear un acceso directo en el escritorio (&Create desktop shortcut)
+spanish.LaunchProgram=Iniciar StreamForge ahora
+spanish.AutoUpdate=Comprobar actualizaciones automáticamente al iniciar (Enable auto-check for updates)
+spanish.SettingsGroup=Configuración (Settings):
+
+french.CreateDesktopIcon=Créer un raccourci sur le Bureau (&Create desktop shortcut)
+french.LaunchProgram=Lancer StreamForge maintenant
+french.AutoUpdate=Vérifier automatiquement les mises à jour au démarrage (Enable auto-check for updates)
+french.SettingsGroup=Paramètres (Settings):
+
+german.CreateDesktopIcon=Desktop-Verknüpfung erstellen (&Create desktop shortcut)
+german.LaunchProgram=StreamForge jetzt starten
+german.AutoUpdate=Beim Programmstart automatisch nach Updates suchen (Enable auto-check for updates)
+german.SettingsGroup=Einstellungen (Settings):
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -109,6 +133,10 @@ begin
       'chinesetraditional': LangCode := 'zh_TW';
       'chinesesimplified': LangCode := 'zh_CN';
       'japanese': LangCode := 'ja_JP';
+      'korean': LangCode := 'ko_KR';
+      'spanish': LangCode := 'es_ES';
+      'french': LangCode := 'fr_FR';
+      'german': LangCode := 'de_DE';
     else
       LangCode := 'en_US';
     end;

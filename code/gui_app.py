@@ -500,7 +500,7 @@ class AboutDialog(ctk.CTkToplevel):
         curr_lang_name = i18n.LANGUAGES.get(i18n.get_current_language(), "繁體中文")
         self.opt_dialog_lang = ctk.CTkOptionMenu(
             row_lang,
-            values=["繁體中文", "English", "简体中文", "日本語"],
+            values=list(i18n.LANGUAGES.values()),
             width=130,
             height=28,
             command=self._on_change_dialog_lang
@@ -733,8 +733,8 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.opt_lang = ctk.CTkOptionMenu(
             title_box,
-            values=["繁體中文", "English", "简体中文", "日本語"],
-            width=100,
+            values=list(i18n.LANGUAGES.values()),
+            width=110,
             height=26,
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#1e293b",
