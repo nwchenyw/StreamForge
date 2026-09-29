@@ -33,5 +33,6 @@ env/
 .DS_Store
 Thumbs.db
 desktop.ini
-.vscode/
-.idea/
+# Certificates and Keys
+*.pfx
+*.key

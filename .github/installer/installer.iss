@@ -44,9 +44,13 @@ ShowLanguageDialog=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequiredOverridesAllowed=commandline dialog
 
-; App display in Windows Add/Remove Programs
+; App display in Windows Settings and Control Panel (應用程式與控制台一鍵正常解除安裝)
+CreateUninstallRegKey=yes
+Uninstallable=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
-UninstallDisplayName={#MyAppName} v{#MyAppVersion}
+UninstallDisplayName={#MyAppName}
+CloseApplications=force
+RestartApplications=no
 
 [Languages]
 Name: "chinesetraditional"; MessagesFile: ".github\installer\languages\ChineseTraditional.isl"
@@ -115,7 +119,27 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram}"; Flags: postinstall nowait skipifsilent
 
+[UninstallDelete]
+; 解除安裝時徹底清理所有運行生成的快取與資料夾，不殘留任何垃圾檔案
+Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\ffmpeg_bin"
+Type: filesandordirs; Name: "{app}\downloads"
+Type: files; Name: "{app}\*.*"
+Type: dirifempty; Name: "{app}"
+
 [Code]
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ConfigDir: string;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    ConfigDir := ExpandConstant('{userappdata}\StreamForge');
+    if DirExists(ConfigDir) then
+      DelTree(ConfigDir, True, True, True);
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigDir, ConfigPath, ConfigContent: string;
