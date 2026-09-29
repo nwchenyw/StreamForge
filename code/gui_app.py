@@ -7,6 +7,7 @@ import webbrowser
 import threading
 import subprocess
 from datetime import datetime
+from typing import Optional, Callable, List, Dict, Any, Union, Tuple
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
