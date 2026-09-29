@@ -5,8 +5,8 @@
 **High-Performance Media Stream & Audio Processing Utility**
 
 <p align="center">
-  <a href="README.zh-TW.md"><b>繁體中文</b></a> •
-  <a href="README.md"><b>English</b></a> •
+  <a href="README.md"><b>繁體中文 (預設)</b></a> •
+  <a href="README.en.md"><b>English</b></a> •
   <a href="README.zh-CN.md"><b>简体中文</b></a> •
   <a href="README.ja.md"><b>日本語</b></a> •
   <a href="README.ko.md"><b>한국어</b></a> •

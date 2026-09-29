@@ -38,6 +38,7 @@ OutputBaseFilename=StreamForge-Setup-v{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+ShowLanguageDialog=yes
 
 ; Support 64-bit installation
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -137,8 +138,9 @@ begin
       'spanish': LangCode := 'es_ES';
       'french': LangCode := 'fr_FR';
       'german': LangCode := 'de_DE';
+      'english': LangCode := 'en_US';
     else
-      LangCode := 'en_US';
+      LangCode := 'zh_TW';
     end;
 
     if not DirExists(ConfigDir) then
