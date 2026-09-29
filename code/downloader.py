@@ -529,17 +529,9 @@ def download_media(
             'retries': 3,
             'fragment_retries': 5,
             'file_access_retries': 3,
-            'socket_timeout': 15,
+            'socket_timeout': 10,
             'geo_bypass': True,
-            'http_chunk_size': 10485760,
-            'buffersize': 1024 * 1024,
-            'concurrent_fragment_downloads': 8,
             'postprocessor_args': ffmpeg_multithread_args,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web']
-                }
-            },
             'no_warnings': True,
             'js_runtimes': {'node': {}},
             'remote_components': ['ejs:github'],
@@ -570,17 +562,9 @@ def download_media(
             'retries': 3,
             'fragment_retries': 5,
             'file_access_retries': 3,
-            'socket_timeout': 15,
+            'socket_timeout': 10,
             'geo_bypass': True,
-            'http_chunk_size': 10485760,
-            'buffersize': 1024 * 1024,
-            'concurrent_fragment_downloads': 8,
             'postprocessor_args': ffmpeg_multithread_args,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web']
-                }
-            },
             'no_warnings': True,
             'js_runtimes': {'node': {}},
             'remote_components': ['ejs:github'],

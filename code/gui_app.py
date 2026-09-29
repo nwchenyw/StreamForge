@@ -1176,6 +1176,7 @@ class MediaDownloaderApp(ctk.CTk):
         self.is_running = False
         self.is_paused = False
         self.cancel_requested = False
+        self.current_download_session = None
         self.pause_event = threading.Event()
         self.pause_event.set()
         self.next_number = 1  # 接續編號起點
@@ -2692,15 +2693,16 @@ class MediaDownloaderApp(ctk.CTk):
         return 5
 
     def toggle_pause(self):
-        """暫停或恢復下載"""
+        """暫停或恢復下載（即時反饋，全元件狀態明確切換）"""
         if not self.is_running:
             return
         if self.is_paused:
             self.is_paused = False
             self.pause_event.set()
             self.btn_pause.configure(text=i18n.t("btn_pause"), fg_color="#f59e0b", hover_color="#d97706")
-            self.lbl_status.configure(text="▶️ 恢復下載中...")
-            self.log("▶️ 使用者恢復了下載任務")
+            self.btn_download.configure(text="⚡ 下載任務進行中...", fg_color="#1e293b")
+            self.lbl_status.configure(text="▶️ 已恢復下載中...")
+            self.log("▶️ 使用者已恢復下載任務")
             for s in self.songs:
                 if s.get('status') == 'paused':
                     s['status'] = 'downloading'
@@ -2709,10 +2711,11 @@ class MediaDownloaderApp(ctk.CTk):
             self.is_paused = True
             self.pause_event.clear()
             self.btn_pause.configure(text=i18n.t("btn_resume"), fg_color="#0284c7", hover_color="#0369a1")
-            self.lbl_status.configure(text="⏸️ 下載已暫停，點擊「繼續下載」以恢復")
-            self.log("⏸️ 使用者暫停了下載任務")
+            self.btn_download.configure(text="⏸️ 任務已暫停（點擊右側「繼續下載」）", fg_color="#475569")
+            self.lbl_status.configure(text="⏸️ 下載已暫停，點擊「繼續下載」按鈕可恢復下載進度")
+            self.log("⏸️ 使用者已暫停下載任務")
             for s in self.songs:
-                if s.get('status') == 'downloading':
+                if s.get('status') in ('downloading', 'converting'):
                     s['status'] = 'paused'
                     self._update_song_status(s, "⏸️ 已暫停", "#94a3b8")
 
@@ -2720,25 +2723,37 @@ class MediaDownloaderApp(ctk.CTk):
         """停止/取消當前下載任務（毫秒級即時響應，絕不卡死）"""
         if not self.is_running:
             return
+
+        # 1. 立即標記取消與切換 Session，阻斷所有背景線程
         self.cancel_requested = True
+        self.current_download_session = None
         self.is_paused = False
         self.pause_event.set()
 
-        self.btn_pause.configure(state="disabled", fg_color="#334155")
-        self.btn_cancel.configure(state="disabled", fg_color="#334155", text="⏹️ 停止中...")
-        self.lbl_status.configure(text="⏹️ 正在停止下載任務...")
-        self.log("⏹️ 使用者已要求立即停止下載任務")
-
-        for s in self.songs:
-            if s.get('status') in ('downloading', 'paused', '等待中'):
-                s['status'] = 'stopped'
-                self._update_song_status(s, "⏹️ 已停止", "#64748b")
-
+        # 2. 立即強行關閉當前線程池
         if hasattr(self, '_current_executor') and self._current_executor:
             try:
                 self._current_executor.shutdown(wait=False, cancel_futures=True)
             except Exception:
                 pass
+            self._current_executor = None
+
+        # 3. 立即重置 UI 狀態，杜絕卡在「停止中」
+        self.is_running = False
+        fmt = extract_format_code(self.opt_format.get())
+        pattern = i18n.t("btn_start_download_pattern")
+        self.btn_download.configure(state="normal", fg_color="#10b981", text=pattern.format(fmt=fmt.upper()))
+        self.btn_pause.configure(state="disabled", fg_color="#334155", text=i18n.t("btn_pause"))
+        self.btn_cancel.configure(state="disabled", fg_color="#334155", text=i18n.t("btn_cancel"))
+        self.btn_add.configure(state="normal")
+        self.lbl_status.configure(text="⏹️ 下載任務已即時停止，可隨時重新開始。")
+        self.log("⏹️ 使用者已停止下載任務（介面已即時恢復就緒）")
+
+        # 4. 更新所有未完成歌曲為已停止
+        for s in self.songs:
+            if s.get('status') in ('downloading', 'paused', '等待中', 'converting'):
+                s['status'] = 'stopped'
+                self._update_song_status(s, "⏹️ 已停止", "#64748b")
 
     def retry_failed_items(self):
         """重試所有失敗的項目"""
@@ -2811,6 +2826,8 @@ class MediaDownloaderApp(ctk.CTk):
         embed_meta = bool(self.chk_meta.get())
         start_num = self.next_number if use_numbering else None
 
+        session_id = uuid.uuid4().hex
+        self.current_download_session = session_id
         self.is_running = True
         self.is_paused = False
         self.cancel_requested = False
@@ -2829,11 +2846,11 @@ class MediaDownloaderApp(ctk.CTk):
 
         threading.Thread(
             target=self._worker_download,
-            args=(selected_songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers),
+            args=(selected_songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers, session_id),
             daemon=True
         ).start()
 
-    def _worker_download(self, songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers=3):
+    def _worker_download(self, songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers=3, session_id=None):
         total = len(songs)
         success_count = 0
         fail_count = 0
@@ -2853,17 +2870,17 @@ class MediaDownloaderApp(ctk.CTk):
         def download_single_song(song_idx, song):
             nonlocal success_count, fail_count, skip_count, completed_count
 
-            # 1. 檢查是否已取消
-            if self.cancel_requested:
+            # 1. 檢查是否已取消或非當前 session
+            if self.cancel_requested or self.current_download_session != session_id:
                 return
 
             # 2. 檢查是否暫停中
             while not self.pause_event.is_set():
-                if self.cancel_requested:
+                if self.cancel_requested or self.current_download_session != session_id:
                     return
-                time.sleep(0.2)
+                time.sleep(0.1)
 
-            if self.cancel_requested:
+            if self.cancel_requested or self.current_download_session != session_id:
                 return
 
             target_ext = f".{format_type}"
@@ -2874,7 +2891,7 @@ class MediaDownloaderApp(ctk.CTk):
 
             # 3. 查重防覆蓋處理（使用 Lock 保證只會跳出一個重複對話框）
             with self.duplicate_lock:
-                if self.cancel_requested:
+                if self.cancel_requested or self.current_download_session != session_id:
                     return
                 dup = downloader.find_existing_duplicate(output_dir, song['title'], target_ext)
                 if dup:
@@ -2914,7 +2931,9 @@ class MediaDownloaderApp(ctk.CTk):
 
             last_song_hook = [0.0]
             def _song_hook(d):
-                if self.is_paused or self.cancel_requested:
+                if self.cancel_requested or self.current_download_session != session_id:
+                    return
+                if self.is_paused:
                     return
                 now = time.time()
                 if now - last_song_hook[0] < 0.3:
@@ -2923,11 +2942,12 @@ class MediaDownloaderApp(ctk.CTk):
                 status = d.get('status')
                 if status == 'downloading':
                     pct = d.get('_percent_str', '').strip()
-                    if pct and song.get('status') == 'downloading':
-                        self.after(0, lambda s=song, p=pct: self._update_song_status(s, f"⚡ 下載中 ({p})", "#f59e0b"))
+                    if pct and song.get('status') == 'downloading' and not self.is_paused:
+                        self.after(0, lambda s=song, p=pct: self._update_song_status(s, f"⚡ 下載中 ({p})", "#f59e0b") if not self.is_paused else None)
                 elif status == 'finished':
-                    song['status'] = 'converting'
-                    self.after(0, lambda s=song: self._update_song_status(s, "🔄 轉檔中...", "#38bdf8"))
+                    if not self.is_paused and not self.cancel_requested:
+                        song['status'] = 'converting'
+                        self.after(0, lambda s=song: self._update_song_status(s, "🔄 轉檔中...", "#38bdf8") if not self.is_paused else None)
 
             try:
                 media_path = downloader.download_media(
@@ -2942,9 +2962,11 @@ class MediaDownloaderApp(ctk.CTk):
                     custom_filename=custom_stem,
                     overwrite=overwrite_flag,
                     log_callback=self.log,
-                    cancel_check=lambda: self.cancel_requested,
+                    cancel_check=lambda: self.cancel_requested or self.current_download_session != session_id,
                     pause_check=lambda: not self.pause_event.is_set()
                 )
+                if self.cancel_requested or self.current_download_session != session_id:
+                    return
                 song['file_path'] = media_path
                 song['error'] = None
                 song['status'] = 'completed'
@@ -2967,15 +2989,14 @@ class MediaDownloaderApp(ctk.CTk):
                 return
 
             except Exception as ex:
-                with prog_lock:
-                    completed_count += 1
-                    pct = completed_count / total
-                    self.after(0, lambda p=pct: self.prog_bar.set(p))
-                if self.cancel_requested:
+                if self.cancel_requested or self.current_download_session != session_id:
                     song['status'] = 'stopped'
                     self.after(0, lambda s=song: self._update_song_status(s, "⏹️ 已停止", "#64748b"))
                     return
                 with prog_lock:
+                    completed_count += 1
+                    pct = completed_count / total
+                    self.after(0, lambda p=pct: self.prog_bar.set(p))
                     fail_count += 1
                 full_err = str(ex)
                 song['error'] = full_err
@@ -2993,10 +3014,17 @@ class MediaDownloaderApp(ctk.CTk):
         try:
             futures = [executor.submit(download_single_song, i, song) for i, song in enumerate(songs, 1)]
             for future in futures:
-                try:
-                    future.result()
-                except Exception:
-                    pass
+                if self.cancel_requested or self.current_download_session != session_id:
+                    break
+                while not future.done():
+                    if self.cancel_requested or self.current_download_session != session_id:
+                        break
+                    try:
+                        future.result(timeout=0.1)
+                    except TimeoutError:
+                        pass
+                    except Exception:
+                        break
         finally:
             try:
                 executor.shutdown(wait=False, cancel_futures=True)
@@ -3004,20 +3032,32 @@ class MediaDownloaderApp(ctk.CTk):
                 pass
             self._current_executor = None
 
+        if self.cancel_requested or self.current_download_session != session_id:
+            # 任務已由使用者即時取消或由新任務取代，終止結算回報
+            return
+
         if start_num is not None:
             self.next_number = start_num + len(songs)
 
-        self.after(0, lambda: self._on_download_finished(success_count, skip_count, fail_count, output_dir, format_type))
+        self.after(0, lambda: self._on_download_finished(success_count, skip_count, fail_count, output_dir, format_type, session_id))
 
     def _update_song_status(self, song, text, color, error_clickable=False):
         if 'status_lbl' in song and song['status_lbl'].winfo_exists():
+            # 若處於暫停狀態，忽略延遲抵達的「下載中 / 轉檔中」回報，保護暫停狀態不被覆寫
+            if self.is_paused and ("下載中" in text or "轉檔中" in text):
+                return
             song['status_lbl'].configure(text=text, text_color=color)
             if error_clickable:
                 song['status_lbl'].configure(cursor="hand2")
             else:
                 song['status_lbl'].configure(cursor="")
 
-    def _on_download_finished(self, success_count, skip_count, fail_count, output_dir, format_type):
+    def _on_download_finished(self, success_count, skip_count, fail_count, output_dir, format_type, session_id=None):
+        if session_id and session_id != self.current_download_session:
+            return
+        if self.cancel_requested:
+            return
+
         self.is_running = False
         self.is_paused = False
 
