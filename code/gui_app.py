@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 import downloader
+import i18n
 
 # 設定外觀模式與主題
 ctk.set_appearance_mode("dark")
@@ -29,6 +30,7 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 def load_app_config() -> dict:
     """載入應用程式使用者設定"""
     default_config = {
+        "language": "zh_TW",
         "auto_check_update": True,
         "install_date": None,
         "preferred_format": "mp3",
@@ -40,6 +42,7 @@ def load_app_config() -> dict:
                 default_config.update(data)
     except Exception:
         pass
+    i18n.set_current_language(default_config.get("language", "zh_TW"))
     return default_config
 
 
@@ -447,15 +450,16 @@ class FailureReportDialog(ctk.CTkToplevel):
 
 
 class AboutDialog(ctk.CTkToplevel):
-    """關於 StreamForge、版權宣告、授權條款與自動更新對話框"""
+    """關於 StreamForge、版權宣告、授權條款與自動更新對話框 (支援多國語言)"""
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("ℹ️ 關於 StreamForge · 智慧財產權與免責聲明")
-        self.geometry("640x580")
+        self.title(i18n.t("about_title"))
+        self.geometry("640x600")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
 
+        self.parent = parent
         self.cfg = load_app_config()
         self.install_date_str = get_install_date_str()
 
@@ -470,37 +474,53 @@ class AboutDialog(ctk.CTkToplevel):
 
         lbl_version = ctk.CTkLabel(
             self,
-            text=f"Version {APP_VERSION} (Windows 64-bit 正式版) · 串流影音工坊",
+            text=f"Version {APP_VERSION} (Windows 64-bit) · {i18n.t('product_name_lbl')}",
             font=ctk.CTkFont(size=12),
             text_color="#94a3b8"
         )
         lbl_version.pack(padx=20, pady=(0, 6))
 
         # 頁籤容器
-        tabview = ctk.CTkTabview(self, width=600, height=410)
+        tabview = ctk.CTkTabview(self, width=600, height=430)
         tabview.pack(padx=20, pady=(0, 10), fill="both", expand=True)
 
-        tab_about = tabview.add("🏢 關於我們")
-        tab_disclaimer = tabview.add("⚖️ 法律免責聲明")
-        tab_license = tabview.add("📜 授權合約 (MIT)")
+        tab_about = tabview.add(i18n.t("tab_about"))
+        tab_disclaimer = tabview.add(i18n.t("tab_disclaimer"))
+        tab_license = tabview.add(i18n.t("tab_license"))
 
         # ------------------ Tab 1: 關於我們 ------------------
         info_card = ctk.CTkFrame(tab_about, fg_color="#1e293b", corner_radius=8)
         info_card.pack(padx=10, pady=8, fill="x")
 
+        # 語言選擇下拉選單
+        row_lang = ctk.CTkFrame(info_card, fg_color="transparent")
+        row_lang.pack(fill="x", padx=12, pady=(8, 4))
+        ctk.CTkLabel(row_lang, text=i18n.t("lang_selector_label"), font=ctk.CTkFont(size=12, weight="bold"), width=160, anchor="w", text_color="#38bdf8").pack(side="left")
+        
+        curr_lang_name = i18n.LANGUAGES.get(i18n.get_current_language(), "繁體中文")
+        self.opt_dialog_lang = ctk.CTkOptionMenu(
+            row_lang,
+            values=["繁體中文", "English", "简体中文", "日本語"],
+            width=130,
+            height=28,
+            command=self._on_change_dialog_lang
+        )
+        self.opt_dialog_lang.set(curr_lang_name)
+        self.opt_dialog_lang.pack(side="left")
+
         items = [
-            ("🏷️ 產品名稱", "StreamForge (串流影音工坊)"),
-            ("📅 安裝日期", self.install_date_str),
-            ("👥 開發團隊", "The StreamForge Team & Contributors"),
-            ("📜 軟體授權", "MIT License (開放原始碼自由使用)"),
-            ("© 智慧財產權", "© 2026 The StreamForge Team. All Rights Reserved."),
-            ("🌐 官方專案", f"https://github.com/{GITHUB_REPO}")
+            (i18n.t("product_name_lbl"), "StreamForge"),
+            (i18n.t("install_date_lbl"), self.install_date_str),
+            (i18n.t("dev_team_lbl"), "The StreamForge Team & Contributors"),
+            (i18n.t("license_lbl"), "MIT License"),
+            (i18n.t("copyright_lbl"), "© 2026 The StreamForge Team. All Rights Reserved."),
+            (i18n.t("project_home_lbl"), f"https://github.com/{GITHUB_REPO}")
         ]
 
         for label, val in items:
             row_f = ctk.CTkFrame(info_card, fg_color="transparent")
             row_f.pack(fill="x", padx=12, pady=3)
-            ctk.CTkLabel(row_f, text=label, font=ctk.CTkFont(size=12, weight="bold"), width=110, anchor="w", text_color="#38bdf8").pack(side="left")
+            ctk.CTkLabel(row_f, text=label, font=ctk.CTkFont(size=12, weight="bold"), width=160, anchor="w", text_color="#38bdf8").pack(side="left")
             ctk.CTkLabel(row_f, text=val, font=ctk.CTkFont(size=12), anchor="w", text_color="#f1f5f9").pack(side="left", fill="x", expand=True)
 
         # 更新設定與手動檢查卡片
@@ -510,7 +530,7 @@ class AboutDialog(ctk.CTkToplevel):
         self.var_autocheck = tk.BooleanVar(value=self.cfg.get("auto_check_update", True))
         chk_autoupdate = ctk.CTkCheckBox(
             update_card,
-            text="☑️ 啟動應用程式時自動檢查最新發布版本 (Auto-check updates)",
+            text=i18n.t("chk_autoupdate"),
             variable=self.var_autocheck,
             font=ctk.CTkFont(size=12),
             command=self._on_toggle_autocheck
@@ -522,7 +542,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         btn_check_now = ctk.CTkButton(
             btn_row,
-            text="🔄 立即檢查更新",
+            text=i18n.t("btn_check_now"),
             font=ctk.CTkFont(size=12, weight="bold"),
             width=130,
             height=32,
@@ -534,7 +554,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         btn_open_repo = ctk.CTkButton(
             btn_row,
-            text="🌐 前往 Releases 頁面",
+            text=i18n.t("btn_open_repo"),
             font=ctk.CTkFont(size=12),
             width=140,
             height=32,
@@ -600,7 +620,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         btn_copy = ctk.CTkButton(
             btn_box,
-            text="📋 複製免責與版權宣告",
+            text=i18n.t("btn_copy_disclaimer"),
             font=ctk.CTkFont(size=12),
             width=160,
             height=34,
@@ -612,7 +632,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         btn_close = ctk.CTkButton(
             btn_box,
-            text="關閉",
+            text=i18n.t("btn_close"),
             font=ctk.CTkFont(size=12, weight="bold"),
             width=90,
             height=34,
@@ -621,6 +641,13 @@ class AboutDialog(ctk.CTkToplevel):
             command=self.destroy
         )
         btn_close.pack(side="right")
+
+    def _on_change_dialog_lang(self, lang_name):
+        if self.parent and hasattr(self.parent, '_on_change_language'):
+            self.parent._on_change_language(lang_name)
+        self.destroy()
+        if self.parent and hasattr(self.parent, 'show_about_dialog'):
+            self.parent.show_about_dialog()
 
     def _on_toggle_autocheck(self):
         val = self.var_autocheck.get()
@@ -668,6 +695,8 @@ class MediaDownloaderApp(ctk.CTk):
 
         # 讀取使用者設定檔並在啟用時進行自動更新檢查
         self.app_config = load_app_config()
+        saved_lang = self.app_config.get("language", "zh_TW")
+        i18n.set_current_language(saved_lang)
 
         self._build_ui()
         self._detect_usb_drives()
@@ -691,19 +720,36 @@ class MediaDownloaderApp(ctk.CTk):
         title_box.grid(row=0, column=0, padx=15, pady=(8, 2), sticky="ew")
         title_box.grid_columnconfigure(0, weight=1)
 
-        title_lbl = ctk.CTkLabel(
+        self.title_lbl = ctk.CTkLabel(
             title_box,
-            text="⚡ StreamForge · 串流影音工坊 (MP3 / MP4 · 命令終端版)",
+            text=i18n.t("app_title"),
             font=ctk.CTkFont(size=20, weight="bold"),
             text_color="#38bdf8"
         )
-        title_lbl.pack(side="left")
+        self.title_lbl.pack(side="left")
 
-        btn_about = ctk.CTkButton(
+        curr_lang = self.app_config.get("language", "zh_TW")
+        curr_lang_name = i18n.LANGUAGES.get(curr_lang, "繁體中文")
+
+        self.opt_lang = ctk.CTkOptionMenu(
             title_box,
-            text="ℹ️ 關於我們 / 授權聲明",
+            values=["繁體中文", "English", "简体中文", "日本語"],
+            width=100,
+            height=26,
             font=ctk.CTkFont(size=11, weight="bold"),
-            width=140,
+            fg_color="#1e293b",
+            button_color="#334155",
+            button_hover_color="#475569",
+            command=self._on_change_language
+        )
+        self.opt_lang.set(curr_lang_name)
+        self.opt_lang.pack(side="right", padx=(8, 0))
+
+        self.btn_about = ctk.CTkButton(
+            title_box,
+            text=i18n.t("btn_about"),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            width=120,
             height=26,
             fg_color="#1e293b",
             hover_color="#334155",
@@ -711,32 +757,32 @@ class MediaDownloaderApp(ctk.CTk):
             border_color="#475569",
             command=self.show_about_dialog
         )
-        btn_about.pack(side="right")
+        self.btn_about.pack(side="right")
 
-        sub_lbl = ctk.CTkLabel(
+        self.sub_lbl = ctk.CTkLabel(
             header_frame,
-            text="逐條加入 · 暫停/取消控制 · 資料夾查重防覆蓋 · 隨身碟 001 編號智慧檢查 · 即時命令列狀態 · 失敗詳細報告與重試",
+            text=i18n.t("app_subtitle"),
             font=ctk.CTkFont(size=12),
             text_color="#94a3b8"
         )
-        sub_lbl.grid(row=1, column=0, padx=15, pady=(0, 8), sticky="w")
+        self.sub_lbl.grid(row=1, column=0, padx=15, pady=(0, 8), sticky="w")
 
         # ================= 2. 單條輸入與加入區 =================
         add_frame = ctk.CTkFrame(self, corner_radius=10)
         add_frame.grid(row=1, column=0, padx=15, pady=4, sticky="ew")
         add_frame.grid_columnconfigure(0, weight=1)
 
-        input_title = ctk.CTkLabel(
+        self.input_title = ctk.CTkLabel(
             add_frame,
-            text="➕ 逐條加入網址（貼上後按 Enter 或點擊「加入清單」）：",
+            text=i18n.t("sec_add_song"),
             font=ctk.CTkFont(size=13, weight="bold")
         )
-        input_title.grid(row=0, column=0, columnspan=4, padx=14, pady=(8, 4), sticky="w")
+        self.input_title.grid(row=0, column=0, columnspan=4, padx=14, pady=(8, 4), sticky="w")
 
         # 單行輸入框
         self.entry_url = ctk.CTkEntry(
             add_frame,
-            placeholder_text="在此貼上影音串流網址（支援單曲、短影片或播放清單），按 Enter 立即加入...",
+            placeholder_text=i18n.t("url_placeholder"),
             font=ctk.CTkFont(size=13),
             height=36
         )
@@ -746,7 +792,7 @@ class MediaDownloaderApp(ctk.CTk):
         # 加入按鈕
         self.btn_add = ctk.CTkButton(
             add_frame,
-            text="➕ 加入清單",
+            text=i18n.t("btn_add"),
             font=ctk.CTkFont(size=13, weight="bold"),
             width=100,
             height=36,
@@ -759,7 +805,7 @@ class MediaDownloaderApp(ctk.CTk):
         # 貼上剪貼簿按鈕
         self.btn_paste = ctk.CTkButton(
             add_frame,
-            text="📋 貼上剪貼簿",
+            text=i18n.t("btn_paste"),
             width=100,
             height=36,
             fg_color="#334155",
@@ -771,7 +817,7 @@ class MediaDownloaderApp(ctk.CTk):
         # 範例按鈕
         self.btn_sample = ctk.CTkButton(
             add_frame,
-            text="✨ 測試範例",
+            text=i18n.t("btn_sample"),
             width=85,
             height=36,
             fg_color="#334155",
@@ -786,25 +832,25 @@ class MediaDownloaderApp(ctk.CTk):
         settings_frame.grid_columnconfigure(1, weight=1)
 
         # 第 1 列：儲存目錄與隨身碟捷徑
-        lbl_dir = ctk.CTkLabel(settings_frame, text="📁 下載目錄:", font=ctk.CTkFont(size=12, weight="bold"))
-        lbl_dir.grid(row=0, column=0, padx=(14, 6), pady=(8, 4), sticky="w")
+        self.lbl_dir = ctk.CTkLabel(settings_frame, text=i18n.t("lbl_save_dir"), font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_dir.grid(row=0, column=0, padx=(14, 6), pady=(8, 4), sticky="w")
 
         self.entry_dir = ctk.CTkEntry(settings_frame, font=ctk.CTkFont(size=12))
         self.entry_dir.insert(0, self.default_download_dir)
         self.entry_dir.grid(row=0, column=1, padx=6, pady=(8, 4), sticky="ew")
 
-        btn_browse = ctk.CTkButton(
+        self.btn_browse = ctk.CTkButton(
             settings_frame,
-            text="瀏覽...",
+            text=i18n.t("btn_browse"),
             width=70,
             fg_color="#475569",
             command=self.browse_directory
         )
-        btn_browse.grid(row=0, column=2, padx=4, pady=(8, 4))
+        self.btn_browse.grid(row=0, column=2, padx=4, pady=(8, 4))
 
         self.btn_usb = ctk.CTkButton(
             settings_frame,
-            text="💾 隨身碟",
+            text=i18n.t("btn_usb"),
             width=85,
             fg_color="#0369a1",
             hover_color="#0284c7",
@@ -812,14 +858,14 @@ class MediaDownloaderApp(ctk.CTk):
         )
         self.btn_usb.grid(row=0, column=3, padx=4, pady=(8, 4))
 
-        btn_open_folder = ctk.CTkButton(
+        self.btn_open_folder = ctk.CTkButton(
             settings_frame,
-            text="📂 開啟",
+            text=i18n.t("btn_open_folder"),
             width=65,
             fg_color="#475569",
             command=self.open_download_folder
         )
-        btn_open_folder.grid(row=0, column=4, padx=(4, 14), pady=(8, 4))
+        self.btn_open_folder.grid(row=0, column=4, padx=(4, 14), pady=(8, 4))
 
         # 第 2 列：隨身碟/資料夾 001 編號智慧檢查列
         num_box = ctk.CTkFrame(settings_frame, fg_color="transparent")
@@ -827,7 +873,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.chk_numbering = ctk.CTkCheckBox(
             num_box,
-            text="🔢 檔名前綴順序編號 (例如: 001 - 歌名.mp3，適合車載/隨身碟播放)",
+            text=i18n.t("chk_auto_number"),
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._on_numbering_toggled
         )
@@ -835,7 +881,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.btn_check_format = ctk.CTkButton(
             num_box,
-            text="🔍 檢查資料夾格式 / 重新編號",
+            text=i18n.t("btn_check_format"),
             width=190,
             height=28,
             font=ctk.CTkFont(size=11),
@@ -857,8 +903,8 @@ class MediaDownloaderApp(ctk.CTk):
         opts_box = ctk.CTkFrame(settings_frame, fg_color="transparent")
         opts_box.grid(row=2, column=0, columnspan=5, padx=14, pady=(0, 6), sticky="ew")
 
-        lbl_format = ctk.CTkLabel(opts_box, text="📦 輸出格式:", font=ctk.CTkFont(size=12, weight="bold"))
-        lbl_format.pack(side="left", padx=(0, 6))
+        self.lbl_format = ctk.CTkLabel(opts_box, text=i18n.t("lbl_format"), font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_format.pack(side="left", padx=(0, 6))
 
         self.seg_format = ctk.CTkSegmentedButton(
             opts_box,
@@ -869,7 +915,7 @@ class MediaDownloaderApp(ctk.CTk):
         self.seg_format.set("🎵 MP3 (純音訊)")
         self.seg_format.pack(side="left", padx=(0, 14))
 
-        self.lbl_quality = ctk.CTkLabel(opts_box, text="🎧 音質位元率:", font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_quality = ctk.CTkLabel(opts_box, text=i18n.t("lbl_quality"), font=ctk.CTkFont(size=12, weight="bold"))
         self.lbl_quality.pack(side="left", padx=(0, 6))
 
         self.opt_quality = ctk.CTkOptionMenu(
@@ -879,11 +925,11 @@ class MediaDownloaderApp(ctk.CTk):
         )
         self.opt_quality.pack(side="left", padx=(0, 14))
 
-        self.chk_thumb = ctk.CTkCheckBox(opts_box, text="🖼️ 嵌入封面縮圖", font=ctk.CTkFont(size=12))
+        self.chk_thumb = ctk.CTkCheckBox(opts_box, text=i18n.t("chk_thumb"), font=ctk.CTkFont(size=12))
         self.chk_thumb.select()
         self.chk_thumb.pack(side="left", padx=8)
 
-        self.chk_meta = ctk.CTkCheckBox(opts_box, text="🏷️ 嵌入標籤資訊", font=ctk.CTkFont(size=12))
+        self.chk_meta = ctk.CTkCheckBox(opts_box, text=i18n.t("chk_meta"), font=ctk.CTkFont(size=12))
         self.chk_meta.select()
         self.chk_meta.pack(side="left", padx=8)
 
@@ -899,7 +945,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.lbl_stats = ctk.CTkLabel(
             tool_bar,
-            text="📊 待下載清單 (共 0 首 | 已選 0 首)",
+            text=i18n.t("stats_pattern").format(total=0, selected=0),
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color="#e2e8f0"
         )
@@ -908,7 +954,7 @@ class MediaDownloaderApp(ctk.CTk):
         # 重新嘗試失敗項目按鈕 (預設隱藏，有失敗時顯示)
         self.btn_retry_failed = ctk.CTkButton(
             tool_bar,
-            text="🔄 重試失敗項目",
+            text=i18n.t("btn_retry_failed"),
             width=115,
             height=28,
             font=ctk.CTkFont(size=12, weight="bold"),
@@ -917,36 +963,36 @@ class MediaDownloaderApp(ctk.CTk):
             command=self.retry_failed_items
         )
 
-        btn_clear_all = ctk.CTkButton(
+        self.btn_clear_all = ctk.CTkButton(
             tool_bar,
-            text="清空清單",
+            text=i18n.t("btn_clear_list"),
             width=75,
             height=28,
             fg_color="#ef4444",
             hover_color="#dc2626",
             command=self.clear_song_list
         )
-        btn_clear_all.pack(side="right", padx=(6, 0))
+        self.btn_clear_all.pack(side="right", padx=(6, 0))
 
-        btn_deselect_all = ctk.CTkButton(
+        self.btn_deselect_all = ctk.CTkButton(
             tool_bar,
-            text="⬜ 全不選",
+            text=i18n.t("btn_deselect_all"),
             width=75,
             height=28,
             fg_color="#475569",
             command=self.deselect_all_songs
         )
-        btn_deselect_all.pack(side="right", padx=6)
+        self.btn_deselect_all.pack(side="right", padx=6)
 
-        btn_select_all = ctk.CTkButton(
+        self.btn_select_all = ctk.CTkButton(
             tool_bar,
-            text="☑️ 全選",
+            text=i18n.t("btn_select_all"),
             width=70,
             height=28,
             fg_color="#475569",
             command=self.select_all_songs
         )
-        btn_select_all.pack(side="right", padx=6)
+        self.btn_select_all.pack(side="right", padx=6)
 
         self.scroll_list = ctk.CTkScrollableFrame(list_container, corner_radius=6)
         self.scroll_list.grid(row=1, column=0, padx=10, pady=(2, 8), sticky="nsew")
@@ -954,7 +1000,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.lbl_empty = ctk.CTkLabel(
             self.scroll_list,
-            text="清單目前是空的。\n請在上方貼上網址並點擊「➕ 加入清單」，一條一條累積您的下載清單！",
+            text=i18n.t("lbl_empty_list"),
             font=ctk.CTkFont(size=14),
             text_color="#64748b"
         )
@@ -971,7 +1017,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.lbl_cmd_title = ctk.CTkLabel(
             cmd_top,
-            text="💻 即時命令列狀態 (Command Mode Log)",
+            text=i18n.t("sec_cmd_console"),
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#38bdf8"
         )
@@ -993,9 +1039,9 @@ class MediaDownloaderApp(ctk.CTk):
         )
         btn_copy_log.pack(side="right", padx=4)
 
-        btn_clear_log = ctk.CTkButton(
+        self.btn_clear_log = ctk.CTkButton(
             cmd_top,
-            text="🧹 清除",
+            text=i18n.t("btn_clear_log"),
             width=60,
             height=24,
             font=ctk.CTkFont(size=11),
@@ -1003,7 +1049,7 @@ class MediaDownloaderApp(ctk.CTk):
             hover_color="#475569",
             command=self.clear_log
         )
-        btn_clear_log.pack(side="right", padx=4)
+        self.btn_clear_log.pack(side="right", padx=4)
 
         self.btn_toggle_cmd = ctk.CTkButton(
             cmd_top,
@@ -1070,7 +1116,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.lbl_status = ctk.CTkLabel(
             bottom_frame,
-            text="系統就緒，等待加入網址",
+            text=i18n.t("status_ready"),
             font=ctk.CTkFont(size=12),
             text_color="#94a3b8",
             anchor="w"
@@ -1089,7 +1135,7 @@ class MediaDownloaderApp(ctk.CTk):
         # 靜態下載按鈕
         self.btn_download = ctk.CTkButton(
             self.action_box,
-            text="🚀 一次下載清單中所有選取的項目 (轉為 MP3)",
+            text=i18n.t("btn_start_download_mp3"),
             font=ctk.CTkFont(size=15, weight="bold"),
             height=42,
             fg_color="#10b981",
@@ -1104,7 +1150,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.btn_pause = ctk.CTkButton(
             self.run_controls_frame,
-            text="⏸️ 暫停下載",
+            text=i18n.t("btn_pause"),
             font=ctk.CTkFont(size=14, weight="bold"),
             height=42,
             fg_color="#f59e0b",
@@ -1115,7 +1161,7 @@ class MediaDownloaderApp(ctk.CTk):
 
         self.btn_cancel = ctk.CTkButton(
             self.run_controls_frame,
-            text="⏹️ 取消下載",
+            text=i18n.t("btn_cancel"),
             font=ctk.CTkFont(size=14, weight="bold"),
             height=42,
             fg_color="#ef4444",
@@ -1135,6 +1181,75 @@ class MediaDownloaderApp(ctk.CTk):
 
     def show_about_dialog(self):
         AboutDialog(self)
+
+    # ================= 多國語言介面即時切換 =================
+
+    def _on_change_language(self, lang_name: str):
+        """切換介面語言並即時刷新所有文字"""
+        lang_code = i18n.LANG_CODE_MAP.get(lang_name, "zh_TW")
+        i18n.set_current_language(lang_code)
+        self.app_config["language"] = lang_code
+        save_app_config(self.app_config)
+        self.refresh_ui_texts()
+        self.log(f"🌐 {i18n.t('lang_switched')} {lang_name} ({lang_code})")
+
+    def refresh_ui_texts(self):
+        """動態更新主介面上所有標籤、按鈕與提示文字"""
+        curr_lang = i18n.get_current_language()
+        curr_lang_name = i18n.LANGUAGES.get(curr_lang, "繁體中文")
+
+        # 視窗與頂部標題
+        self.title(f"StreamForge v{APP_VERSION} · {i18n.t('app_subtitle')}")
+        self.title_lbl.configure(text=i18n.t("app_title"))
+        self.sub_lbl.configure(text=i18n.t("app_subtitle"))
+        self.btn_about.configure(text=i18n.t("btn_about"))
+        self.opt_lang.set(curr_lang_name)
+
+        # 區塊 1: 新增
+        self.input_title.configure(text=i18n.t("sec_add_song"))
+        self.entry_url.configure(placeholder_text=i18n.t("url_placeholder"))
+        self.btn_add.configure(text=i18n.t("btn_add"))
+        self.btn_paste.configure(text=i18n.t("btn_paste"))
+        self.btn_sample.configure(text=i18n.t("btn_sample"))
+
+        # 區塊 2: 設定
+        self.lbl_dir.configure(text=i18n.t("lbl_save_dir"))
+        self.btn_browse.configure(text=i18n.t("btn_browse"))
+        self.btn_usb.configure(text=i18n.t("btn_usb"))
+        self.btn_open_folder.configure(text=i18n.t("btn_open_folder"))
+        self.chk_numbering.configure(text=i18n.t("chk_auto_number"))
+        self.btn_check_format.configure(text=i18n.t("btn_check_format"))
+        self.lbl_format.configure(text=i18n.t("lbl_format"))
+
+        fmt = self.seg_format.get()
+        if "MP4" in fmt:
+            self.lbl_quality.configure(text=i18n.t("lbl_quality_video"))
+            self.btn_download.configure(text=i18n.t("btn_start_download_mp4"))
+        else:
+            self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
+            self.btn_download.configure(text=i18n.t("btn_start_download_mp3"))
+
+        self.chk_thumb.configure(text=i18n.t("chk_thumb"))
+        self.chk_meta.configure(text=i18n.t("chk_meta"))
+
+        # 區塊 3: 清單
+        self.btn_select_all.configure(text=i18n.t("btn_select_all"))
+        self.btn_deselect_all.configure(text=i18n.t("btn_deselect_all"))
+        self.btn_clear_all.configure(text=i18n.t("btn_clear_list"))
+        self.btn_retry_failed.configure(text=i18n.t("btn_retry_failed"))
+        self.lbl_empty.configure(text=i18n.t("lbl_empty_list"))
+        self.update_stats()
+
+        # 區塊 4: 命令終端
+        self.lbl_cmd_title.configure(text=i18n.t("sec_cmd_console"))
+        self.btn_clear_log.configure(text=i18n.t("btn_clear_log"))
+        self.btn_toggle_cmd.configure(text=i18n.t("btn_collapse") if self.console_visible else i18n.t("btn_expand"))
+
+        # 區塊 5: 底部控制
+        if not self.is_running:
+            self.lbl_status.configure(text=i18n.t("status_ready"))
+        self.btn_pause.configure(text=i18n.t("btn_pause") if not self.is_paused else i18n.t("btn_resume"))
+        self.btn_cancel.configure(text=i18n.t("btn_cancel"))
 
     # ================= 命令模式日誌功能 =================
 
@@ -1620,7 +1735,7 @@ class MediaDownloaderApp(ctk.CTk):
 
     def _on_format_changed(self, value):
         if "MP4" in value:
-            self.lbl_quality.configure(text="📺 影片解析度:")
+            self.lbl_quality.configure(text=i18n.t("lbl_quality_video"))
             self.opt_quality.configure(values=[
                 "最高畫質 (最佳/推薦)",
                 "1080p (Full HD)",
@@ -1630,10 +1745,10 @@ class MediaDownloaderApp(ctk.CTk):
             ])
             self.opt_quality.set("最高畫質 (最佳/推薦)")
             self.chk_thumb.configure(state="disabled")
-            self.btn_download.configure(text="🚀 一次下載清單中所有選取的項目 (轉為 MP4 影片)")
+            self.btn_download.configure(text=i18n.t("btn_start_download_mp4"))
             self.log("切換為 🎬 MP4 視訊影片模式")
         else:
-            self.lbl_quality.configure(text="🎧 音質位元率:")
+            self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
             self.opt_quality.configure(values=[
                 "320 kbps (最高品質/推薦)",
                 "256 kbps (高質量)",
@@ -1642,7 +1757,7 @@ class MediaDownloaderApp(ctk.CTk):
             ])
             self.opt_quality.set("320 kbps (最高品質/推薦)")
             self.chk_thumb.configure(state="normal")
-            self.btn_download.configure(text="🚀 一次下載清單中所有選取的項目 (轉為 MP3 音訊)")
+            self.btn_download.configure(text=i18n.t("btn_start_download_mp3"))
             self.log("切換為 🎵 MP3 純音訊模式")
 
     # ================= 互動事件處理 =================
@@ -1686,7 +1801,8 @@ class MediaDownloaderApp(ctk.CTk):
     def update_stats(self):
         total = len(self.songs)
         selected = sum(1 for s in self.songs if s['var'].get())
-        self.lbl_stats.configure(text=f"📊 待下載清單 (共 {total} 首 | 已選 {selected} 首)")
+        pattern = i18n.t("stats_pattern")
+        self.lbl_stats.configure(text=pattern.format(total=total, selected=selected))
 
     def select_all_songs(self):
         for s in self.songs:

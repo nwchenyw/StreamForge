@@ -48,15 +48,35 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName} v{#MyAppVersion}
 
 [Languages]
+Name: "chinesetraditional"; MessagesFile: ".github\installer\languages\ChineseTraditional.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimplified"; MessagesFile: ".github\installer\languages\ChineseSimplified.isl"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 
 [CustomMessages]
-english.CreateDesktopIcon=建立桌面捷徑 (Create desktop shortcut)
-english.LaunchProgram=立即啟動 StreamForge
+chinesetraditional.CreateDesktopIcon=建立桌面捷徑 (&Create desktop shortcut)
+chinesetraditional.LaunchProgram=立即啟動 StreamForge
+chinesetraditional.AutoUpdate=啟用軟體啟動時自動檢查最新版本 (Enable auto-check for updates)
+chinesetraditional.SettingsGroup=偏好設定 (Settings):
+
+english.CreateDesktopIcon=Create desktop shortcut
+english.LaunchProgram=Launch StreamForge now
+english.AutoUpdate=Enable auto-check for updates on startup
+english.SettingsGroup=Settings:
+
+chinesesimplified.CreateDesktopIcon=创建桌面快捷方式 (&Create desktop shortcut)
+chinesesimplified.LaunchProgram=立即启动 StreamForge
+chinesesimplified.AutoUpdate=启用软件启动时自动检查最新版本 (Enable auto-check for updates)
+chinesesimplified.SettingsGroup=偏好设置 (Settings):
+
+japanese.CreateDesktopIcon=デスクトップにショートカットを作成する (&Create desktop shortcut)
+japanese.LaunchProgram=StreamForge を今すぐ起動
+japanese.AutoUpdate=起動時に最新バージョンの更新を自動確認する (Enable auto-check for updates)
+japanese.SettingsGroup=設定 (Settings):
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "autoupdate"; Description: "啟用軟體啟動時自動檢查最新版本 (Enable auto-check for updates)"; GroupDescription: "更新與偏好設定 (Settings):"; Flags: checkedonce
+Name: "autoupdate"; Description: "{cm:AutoUpdate}"; GroupDescription: "{cm:SettingsGroup}"; Flags: checkedonce
 
 [Files]
 ; Copy all files from PyInstaller dist directory
@@ -68,13 +88,13 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram}"; Flags: postinstall nowait skipifsilent
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigDir, ConfigPath, ConfigContent: string;
-  AutoUpdateVal: string;
+  AutoUpdateVal, LangCode: string;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -85,17 +105,23 @@ begin
     else
       AutoUpdateVal := 'false';
 
+    case ActiveLanguage of
+      'chinesetraditional': LangCode := 'zh_TW';
+      'chinesesimplified': LangCode := 'zh_CN';
+      'japanese': LangCode := 'ja_JP';
+    else
+      LangCode := 'en_US';
+    end;
+
     if not DirExists(ConfigDir) then
       ForceDirectories(ConfigDir);
 
-    if not FileExists(ConfigPath) then
-    begin
-      ConfigContent := '{' + #13#10 +
-        '  "auto_check_update": ' + AutoUpdateVal + ',' + #13#10 +
-        '  "install_date": "' + GetDateTimeString('yyyy/mm/dd hh:nn', '-', ':') + '",' + #13#10 +
-        '  "preferred_format": "mp3"' + #13#10 +
-        '}';
-      SaveStringToFile(ConfigPath, ConfigContent, False);
-    end;
+    ConfigContent := '{' + #13#10 +
+      '  "language": "' + LangCode + '",' + #13#10 +
+      '  "auto_check_update": ' + AutoUpdateVal + ',' + #13#10 +
+      '  "install_date": "' + GetDateTimeString('yyyy/mm/dd hh:nn', '-', ':') + '",' + #13#10 +
+      '  "preferred_format": "mp3"' + #13#10 +
+      '}';
+    SaveStringToFile(ConfigPath, ConfigContent, False);
   end;
 end;
