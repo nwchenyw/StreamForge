@@ -1401,11 +1401,11 @@ class MediaDownloaderApp(ctk.CTk):
         # 多線程併發下拉選單
         self.opt_threads = ctk.CTkOptionMenu(
             num_box,
-            values=["3 線程 (推薦)", "1 線程 (單工)", "2 線程", "4 線程 (高速)", "5 線程 (極速)"],
-            width=125,
+            values=["5 線程 (極速/推薦)", "4 線程 (高速)", "3 線程 (標準)", "2 線程", "1 線程 (單工)"],
+            width=135,
             height=28
         )
-        self.opt_threads.set("3 線程 (推薦)")
+        self.opt_threads.set("5 線程 (極速/推薦)")
         self.opt_threads.pack(side="right", padx=(2, 0))
 
         self.lbl_threads = ctk.CTkLabel(
@@ -2606,38 +2606,63 @@ class MediaDownloaderApp(ctk.CTk):
                 self.log(f"ℹ️ 使用者確認匯入整個播放清單（共 {total_items} 首歌曲）")
 
         existing_ids = {s['id'] for s in self.songs}
-        added_count = 0
-        many_items = len(items) > 10
-
-        if many_items:
-            self.log(f"➕ 正在加入 {len(items)} 首歌曲至清單...")
-
+        valid_items = []
         for item in items:
             if item.get('status') == '解析失敗':
                 self.log(f"❌ 解析曲目失敗: {item.get('error', '未知錯誤')}")
                 messagebox.showerror("解析失敗", f"無法讀取該網址：\n{item.get('error', '未知錯誤')}", parent=self)
                 continue
-
             if item['id'] not in existing_ids:
+                valid_items.append(item)
+                existing_ids.add(item['id'])
+
+        if not valid_items:
+            self.btn_add.configure(state="normal", text="➕ 加入清單")
+            self.prog_bar.set(0)
+            self.lbl_status.configure(text="⚠️ 該歌曲或清單項目已在清單中，未重複加入。")
+            return
+
+        total_new = len(valid_items)
+
+        # 若項目只有 1~3 首，直接同步極速渲染
+        if total_new <= 3:
+            for item in valid_items:
                 self.songs.append(item)
                 self.render_song_row(item)
-                existing_ids.add(item['id'])
-                added_count += 1
-                if not many_items:
-                    self.log(f"➕ 已加入曲目: {item['title']} (頻道: {item['uploader']}, 長度: {item['duration_str']})")
-
-        if many_items and added_count > 0:
-            self.log(f"✅ 已成功加入 {added_count} 首歌曲！")
-
-        self.update_stats()
-
-        if added_count > 0:
-            if len(items) == 1:
-                self.lbl_status.configure(text=f"✅ 已成功加入: {items[0]['title']}")
+                self.log(f"➕ 已加入曲目: {item['title']} (頻道: {item['uploader']}, 長度: {item['duration_str']})")
+            self.btn_add.configure(state="normal", text="➕ 加入清單")
+            self.prog_bar.set(0)
+            self.update_stats()
+            if total_new == 1:
+                self.lbl_status.configure(text=f"✅ 已成功加入: {valid_items[0]['title']}")
             else:
-                self.lbl_status.configure(text=f"✅ 已成功從播放清單加入 {added_count} 首歌曲！")
-        else:
-            self.lbl_status.configure(text="⚠️ 該歌曲已在清單中，未重複加入。")
+                self.lbl_status.configure(text=f"✅ 已成功加入 {total_new} 首歌曲！")
+            return
+
+        # 若為大量曲目（如播放清單），採用非同步微批次流水線渲染，每次渲染 8 首並讓出 UI 線程，杜絕介面卡死
+        self.log(f"⚡ 正在以極速流水線加入 {total_new} 首歌曲至駐列清單...")
+
+        def _render_chunk(start_idx):
+            end_idx = min(start_idx + 8, total_new)
+            for i in range(start_idx, end_idx):
+                item = valid_items[i]
+                self.songs.append(item)
+                self.render_song_row(item)
+
+            self.update_stats()
+            pct = end_idx / total_new
+            self.prog_bar.set(pct)
+            self.lbl_status.configure(text=f"➕ 正在加入清單曲目 ({end_idx}/{total_new})...")
+
+            if end_idx < total_new:
+                self.after(5, lambda: _render_chunk(end_idx))
+            else:
+                self.btn_add.configure(state="normal", text="➕ 加入清單")
+                self.prog_bar.set(0)
+                self.lbl_status.configure(text=f"✅ 已成功從播放清單加入 {total_new} 首歌曲！")
+                self.log(f"🎉 已成功將播放清單中全部 {total_new} 首歌曲加入駐列清單！")
+
+        _render_chunk(0)
 
     # ================= 批次下載、暫停、取消與查重 =================
 
@@ -2664,7 +2689,7 @@ class MediaDownloaderApp(ctk.CTk):
             digits = re.findall(r'\d+', val)
             if digits:
                 return max(1, min(8, int(digits[0])))
-        return 3
+        return 5
 
     def toggle_pause(self):
         """暫停或恢復下載"""

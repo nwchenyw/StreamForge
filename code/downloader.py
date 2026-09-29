@@ -257,16 +257,15 @@ def extract_single_url_info(url: str) -> List[Dict]:
     """
     ydl_opts = {
         'extract_flat': True,
+        'skip_download': True,
+        'check_formats': False,
         'quiet': True,
         'no_warnings': True,
-        'socket_timeout': 30,
+        'no_color': True,
+        'socket_timeout': 10,
         'geo_bypass': True,
-        'retries': 10,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['ios', 'android', 'mweb', 'web']
-            }
-        },
+        'retries': 2,
+        'playlistend': 100,
         'js_runtimes': {'node': {}},
         'remote_components': ['ejs:github'],
     }
@@ -527,16 +526,18 @@ def download_media(
             'postprocessors': postprocessors,
             'writethumbnail': embed_thumbnail and fmt in ('mp3', 'm4a', 'flac', 'ogg'),
             'overwrites': overwrite,
-            'retries': 10,
-            'fragment_retries': 10,
+            'retries': 3,
+            'fragment_retries': 5,
             'file_access_retries': 3,
-            'socket_timeout': 30,
+            'socket_timeout': 15,
             'geo_bypass': True,
-            'concurrent_fragment_downloads': 4,
+            'http_chunk_size': 10485760,
+            'buffersize': 1024 * 1024,
+            'concurrent_fragment_downloads': 8,
             'postprocessor_args': ffmpeg_multithread_args,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['ios', 'android', 'mweb', 'web']
+                    'player_client': ['android', 'web']
                 }
             },
             'no_warnings': True,
@@ -566,16 +567,18 @@ def download_media(
             'merge_output_format': merge_fmt,
             'postprocessors': postprocessors,
             'overwrites': overwrite,
-            'retries': 10,
-            'fragment_retries': 10,
+            'retries': 3,
+            'fragment_retries': 5,
             'file_access_retries': 3,
-            'socket_timeout': 30,
+            'socket_timeout': 15,
             'geo_bypass': True,
-            'concurrent_fragment_downloads': 4,
+            'http_chunk_size': 10485760,
+            'buffersize': 1024 * 1024,
+            'concurrent_fragment_downloads': 8,
             'postprocessor_args': ffmpeg_multithread_args,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['ios', 'android', 'mweb', 'web']
+                    'player_client': ['android', 'web']
                 }
             },
             'no_warnings': True,
