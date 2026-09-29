@@ -45,7 +45,7 @@ PrivilegesRequiredOverridesAllowed=commandline dialog
 SetupIconFile=assets\app_icon.ico
 CreateUninstallRegKey=yes
 Uninstallable=yes
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\assets\app_icon.ico
 UninstallDisplayName={#MyAppName}
 CloseApplications=force
 RestartApplications=no
@@ -177,7 +177,6 @@ Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\app_icon.ico"
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\app_icon.ico"; Tasks: desktopicon
 
 [Run]
