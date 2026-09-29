@@ -1135,6 +1135,10 @@ class MediaDownloaderApp(ctk.CTk):
         self.console_visible = True
         self.cmd_history = []
         self.cmd_history_idx = -1
+        self.btn_download = None
+        self.lbl_quality = None
+        self.opt_quality = None
+        self.chk_thumb = None
 
         self._build_ui()
         self._detect_usb_drives()
@@ -1401,13 +1405,11 @@ class MediaDownloaderApp(ctk.CTk):
             self.opt_format.configure(values=VIDEO_FORMAT_OPTIONS)
             match_opt = next((o for o in VIDEO_FORMAT_OPTIONS if extract_format_code(o) == pref_fmt), VIDEO_FORMAT_OPTIONS[0])
             self.opt_format.set(match_opt)
-            self._on_format_changed(match_opt)
         else:
             self.seg_media_type.set(i18n.t("type_audio"))
             self.opt_format.configure(values=AUDIO_FORMAT_OPTIONS)
             match_opt = next((o for o in AUDIO_FORMAT_OPTIONS if extract_format_code(o) == pref_fmt), AUDIO_FORMAT_OPTIONS[0])
             self.opt_format.set(match_opt)
-            self._on_format_changed(match_opt)
 
         # ================= 4. 歌曲清單管理與滾動展示區 =================
         list_container = ctk.CTkFrame(self, corner_radius=10)
@@ -1654,6 +1656,10 @@ class MediaDownloaderApp(ctk.CTk):
             text_color="#64748b"
         )
         lbl_footer.grid(row=3, column=0, padx=15, pady=(2, 6))
+
+        # 完成整體介面建置後，初始化格式與品質聯動
+        if hasattr(self, "opt_format"):
+            self._on_format_changed(self.opt_format.get())
 
     def show_about_dialog(self):
         AboutDialog(self)
@@ -2244,30 +2250,35 @@ class MediaDownloaderApp(ctk.CTk):
 
     def _on_format_changed(self, value):
         fmt = extract_format_code(value)
-        if fmt in ('wav', 'flac'):
-            self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
-            self.opt_quality.configure(values=AUDIO_QUALITIES_LOSSLESS)
-            self.opt_quality.set(AUDIO_QUALITIES_LOSSLESS[0])
-            if fmt == 'wav':
-                self.chk_thumb.configure(state="disabled")
+        if getattr(self, "lbl_quality", None) and getattr(self, "opt_quality", None):
+            if fmt in ('wav', 'flac'):
+                self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
+                self.opt_quality.configure(values=AUDIO_QUALITIES_LOSSLESS)
+                self.opt_quality.set(AUDIO_QUALITIES_LOSSLESS[0])
+                if getattr(self, "chk_thumb", None):
+                    if fmt == 'wav':
+                        self.chk_thumb.configure(state="disabled")
+                    else:
+                        self.chk_thumb.configure(state="normal")
+                self.log(f"切換為 💿 {fmt.upper()} (無損音訊模式)")
+            elif fmt in ('mp3', 'm4a', 'aac', 'ogg', 'opus'):
+                self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
+                self.opt_quality.configure(values=AUDIO_QUALITIES_LOSSY)
+                self.opt_quality.set(AUDIO_QUALITIES_LOSSY[0])
+                if getattr(self, "chk_thumb", None):
+                    self.chk_thumb.configure(state="normal" if fmt in ('mp3', 'm4a', 'ogg') else "disabled")
+                self.log(f"切換為 🎵 {fmt.upper()} (純音訊模式)")
             else:
-                self.chk_thumb.configure(state="normal")
-            self.log(f"切換為 💿 {fmt.upper()} (無損音訊模式)")
-        elif fmt in ('mp3', 'm4a', 'aac', 'ogg', 'opus'):
-            self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
-            self.opt_quality.configure(values=AUDIO_QUALITIES_LOSSY)
-            self.opt_quality.set(AUDIO_QUALITIES_LOSSY[0])
-            self.chk_thumb.configure(state="normal" if fmt in ('mp3', 'm4a', 'ogg') else "disabled")
-            self.log(f"切換為 🎵 {fmt.upper()} (純音訊模式)")
-        else:
-            self.lbl_quality.configure(text=i18n.t("lbl_quality_video"))
-            self.opt_quality.configure(values=VIDEO_QUALITIES)
-            self.opt_quality.set(VIDEO_QUALITIES[0])
-            self.chk_thumb.configure(state="disabled")
-            self.log(f"切換為 🎬 {fmt.upper()} (視訊影片模式)")
+                self.lbl_quality.configure(text=i18n.t("lbl_quality_video"))
+                self.opt_quality.configure(values=VIDEO_QUALITIES)
+                self.opt_quality.set(VIDEO_QUALITIES[0])
+                if getattr(self, "chk_thumb", None):
+                    self.chk_thumb.configure(state="disabled")
+                self.log(f"切換為 🎬 {fmt.upper()} (視訊影片模式)")
 
-        pattern = i18n.t("btn_start_download_pattern")
-        self.btn_download.configure(text=pattern.format(fmt=fmt.upper()))
+        if getattr(self, "btn_download", None):
+            pattern = i18n.t("btn_start_download_pattern")
+            self.btn_download.configure(text=pattern.format(fmt=fmt.upper()))
 
         # 記憶偏好格式
         self.app_config["preferred_format"] = fmt
