@@ -1,0 +1,2159 @@
+import os
+import sys
+import time
+import json
+import urllib.request
+import webbrowser
+import threading
+import subprocess
+from datetime import datetime
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import customtkinter as ctk
+import downloader
+
+# 設定外觀模式與主題
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+# ================= 設定檔與更新檢查 =================
+APP_VERSION = "1.0.0"
+GITHUB_REPO = "nwchenyw/StreamForge"
+GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
+
+CONFIG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "StreamForge")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+
+def load_app_config() -> dict:
+    """載入應用程式使用者設定"""
+    default_config = {
+        "auto_check_update": True,
+        "install_date": None,
+        "preferred_format": "mp3",
+    }
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                default_config.update(data)
+    except Exception:
+        pass
+    return default_config
+
+
+def save_app_config(cfg: dict):
+    """保存應用程式使用者設定"""
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def get_install_date_str() -> str:
+    """獲取軟體安裝日期（若未記錄則自動讀取執行檔建立時間並持久化儲存）"""
+    cfg = load_app_config()
+    if cfg.get("install_date"):
+        return cfg["install_date"]
+
+    target_path = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
+    try:
+        ctime = os.path.getctime(target_path)
+        dt = datetime.fromtimestamp(ctime)
+        date_str = dt.strftime("%Y年%m月%d日 %H:%M")
+    except Exception:
+        date_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+
+    cfg["install_date"] = date_str
+    save_app_config(cfg)
+    return date_str
+
+
+def check_for_updates(parent=None, silent=False):
+    """在背景執行緒中檢查 GitHub 最新版本"""
+    def _worker():
+        try:
+            req = urllib.request.Request(
+                GITHUB_RELEASES_API,
+                headers={"User-Agent": "StreamForge-Desktop-App"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    raw_tag = data.get("tag_name", "").lstrip("v")
+                    html_url = data.get("html_url", GITHUB_RELEASES_URL)
+
+                    def parse_v(v_str):
+                        parts = []
+                        for p in v_str.split("."):
+                            try:
+                                parts.append(int(p))
+                            except ValueError:
+                                parts.append(0)
+                        return parts
+
+                    latest_v = parse_v(raw_tag) if raw_tag else []
+                    curr_v = parse_v(APP_VERSION)
+
+                    # 尋找直接下載的安裝檔網址 (.exe)
+                    direct_exe_url = None
+                    for asset in data.get("assets", []):
+                        if asset.get("name", "").endswith(".exe"):
+                            direct_exe_url = asset.get("browser_download_url")
+                            break
+
+                    if latest_v and latest_v > curr_v:
+                        if parent and parent.winfo_exists():
+                            parent.after(0, lambda: _prompt_update(parent, raw_tag, html_url, direct_exe_url))
+                        return
+                    else:
+                        if not silent and parent and parent.winfo_exists():
+                            parent.after(0, lambda: messagebox.showinfo(
+                                "版本檢查",
+                                f"🎉 目前已是最新版本 (v{APP_VERSION})！"
+                            ))
+                        return
+        except Exception:
+            if not silent and parent and parent.winfo_exists():
+                parent.after(0, lambda: messagebox.showinfo(
+                    "檢查更新提示",
+                    f"目前使用版本：v{APP_VERSION}\n若要獲取最新發布安裝檔或原始碼，請前往官方 GitHub Releases 頁面。"
+                ))
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
+class UpdateDownloadDialog(ctk.CTkToplevel):
+    """自動下載新版安裝檔並執行升級的進度視窗"""
+    def __init__(self, parent, new_version: str, download_url: str):
+        super().__init__(parent)
+        self.title("🚀 StreamForge - 正在自動下載更新")
+        self.geometry("460x200")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        self.new_version = new_version
+        self.download_url = download_url
+        self.cancelled = False
+
+        lbl_title = ctk.CTkLabel(
+            self,
+            text=f"正在下載 StreamForge v{new_version} 更新安裝檔...",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#38bdf8"
+        )
+        lbl_title.pack(padx=20, pady=(20, 10))
+
+        self.lbl_status = ctk.CTkLabel(
+            self,
+            text="連線中...",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8"
+        )
+        self.lbl_status.pack(padx=20, pady=(0, 10))
+
+        self.progress_bar = ctk.CTkProgressBar(self, width=380, height=14)
+        self.progress_bar.pack(padx=20, pady=(0, 15))
+        self.progress_bar.set(0.0)
+
+        self.btn_cancel = ctk.CTkButton(
+            self,
+            text="取消下載",
+            width=100,
+            height=32,
+            fg_color="#334155",
+            hover_color="#475569",
+            command=self._cancel
+        )
+        self.btn_cancel.pack(pady=(0, 15))
+
+        threading.Thread(target=self._start_download, daemon=True).start()
+
+    def _cancel(self):
+        self.cancelled = True
+        self.destroy()
+
+    def _start_download(self):
+        temp_dir = os.environ.get("TEMP", os.path.expanduser("~"))
+        target_path = os.path.join(temp_dir, f"StreamForge-Setup-v{self.new_version}.exe")
+        try:
+            req = urllib.request.Request(
+                self.download_url,
+                headers={"User-Agent": "StreamForge-Desktop-App"}
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                total_size = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                chunk_size = 64 * 1024
+
+                with open(target_path, "wb") as f:
+                    while True:
+                        if self.cancelled:
+                            return
+                        chunk = resp.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            pct = downloaded / total_size
+                            self.after(0, lambda p=pct, d=downloaded, t=total_size: self._update_ui(p, d, t))
+
+            if not self.cancelled:
+                self.after(0, lambda: self._on_download_complete(target_path))
+        except Exception as e:
+            if not self.cancelled:
+                self.after(0, lambda: messagebox.showerror("更新失敗", f"下載更新檔時發生錯誤：\n{e}\n\n請手動前往 GitHub 頁面下載。"))
+                self.after(0, self.destroy)
+
+    def _update_ui(self, pct, downloaded, total):
+        if not self.winfo_exists():
+            return
+        self.progress_bar.set(pct)
+        mb_down = downloaded / (1024 * 1024)
+        mb_tot = total / (1024 * 1024)
+        self.lbl_status.configure(text=f"已下載: {mb_down:.1f} MB / {mb_tot:.1f} MB ({pct*100:.0f}%)")
+
+    def _on_download_complete(self, target_path):
+        if not self.winfo_exists():
+            return
+        self.destroy()
+        res = messagebox.askyesno(
+            "下載完成",
+            f"🎉 StreamForge v{self.new_version} 安裝檔已下載完畢！\n\n是否立即啟動安裝程式進行覆蓋更新？\n(程式將自動關閉以進行更新)"
+        )
+        if res:
+            try:
+                subprocess.Popen([target_path])
+                os._exit(0)
+            except Exception as e:
+                messagebox.showerror("啟動失敗", f"無法啟動安裝程式：{e}")
+
+
+def _prompt_update(parent, new_version, release_url, direct_exe_url=None):
+    if direct_exe_url:
+        res = messagebox.askyesno(
+            "發現新版本",
+            f"🚀 發現 StreamForge 新版本 v{new_version}！\n\n目前版本：v{APP_VERSION}\n\n點選【是 (Yes)】：立即自動下載更新並安裝\n點選【否 (No)】：前往 GitHub 網頁查看更新日誌",
+            icon="question"
+        )
+        if res:
+            UpdateDownloadDialog(parent, new_version, direct_exe_url)
+        else:
+            webbrowser.open(release_url)
+    else:
+        res = messagebox.askyesno(
+            "發現新版本",
+            f"🚀 發現 StreamForge 新版本 v{new_version}！\n\n目前版本：v{APP_VERSION}\n請問是否前往 GitHub Releases 頁面下載新版本？"
+        )
+        if res:
+            webbrowser.open(release_url)
+
+
+
+class DuplicateDialog(ctk.CTkToplevel):
+    """發現重複檔案時的選擇互動視窗"""
+    def __init__(self, parent, song_title: str, existing_filename: str):
+        super().__init__(parent)
+        self.title("⚠️ 發現重複檔案 - 選擇處理方式")
+        self.geometry("540x350")
+        self.resizable(False, False)
+
+        self.action = "skip"  # 'overwrite', 'suffix', 'skip'
+        self.apply_all = False
+
+        self.transient(parent)
+        self.grab_set()
+
+        lbl_icon = ctk.CTkLabel(
+            self,
+            text="⚠️ 發現重複檔案！",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color="#f59e0b"
+        )
+        lbl_icon.pack(padx=20, pady=(15, 6))
+
+        info_box = ctk.CTkFrame(self, fg_color="#1e293b", corner_radius=8)
+        info_box.pack(padx=20, pady=6, fill="x")
+
+        display_title = song_title if len(song_title) <= 50 else song_title[:47] + "..."
+        lbl_song = ctk.CTkLabel(
+            info_box,
+            text=f"準備下載：{display_title}",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            anchor="w",
+            text_color="#f8fafc"
+        )
+        lbl_song.pack(padx=12, pady=(8, 2), fill="x")
+
+        lbl_exist = ctk.CTkLabel(
+            info_box,
+            text=f"現有檔案：{existing_filename}",
+            font=ctk.CTkFont(size=12),
+            anchor="w",
+            text_color="#94a3b8"
+        )
+        lbl_exist.pack(padx=12, pady=(2, 8), fill="x")
+
+        lbl_prompt = ctk.CTkLabel(
+            self,
+            text="目標資料夾中已存在同名或相同歌曲，請問您希望如何處理？",
+            font=ctk.CTkFont(size=12)
+        )
+        lbl_prompt.pack(padx=20, pady=4)
+
+        # 套用到全部
+        self.chk_all = ctk.CTkCheckBox(
+            self,
+            text="☑️ 套用到後續所有重複檔案（本次任務不再詢問）",
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        self.chk_all.pack(padx=20, pady=8)
+
+        # 按鈕群組
+        btn_box = ctk.CTkFrame(self, fg_color="transparent")
+        btn_box.pack(padx=20, pady=(8, 15), fill="x")
+        btn_box.grid_columnconfigure((0, 1, 2), weight=1)
+
+        btn_ovr = ctk.CTkButton(
+            btn_box,
+            text="🔁 覆蓋檔案",
+            fg_color="#f59e0b",
+            hover_color="#d97706",
+            height=38,
+            command=lambda: self._choose("overwrite")
+        )
+        btn_ovr.grid(row=0, column=0, padx=4, sticky="ew")
+
+        btn_suf = ctk.CTkButton(
+            btn_box,
+            text="➕ 加上 (1) 後綴",
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            height=38,
+            command=lambda: self._choose("suffix")
+        )
+        btn_suf.grid(row=0, column=1, padx=4, sticky="ew")
+
+        btn_skp = ctk.CTkButton(
+            btn_box,
+            text="⏭️ 略過此首",
+            fg_color="#64748b",
+            hover_color="#475569",
+            height=38,
+            command=lambda: self._choose("skip")
+        )
+        btn_skp.grid(row=0, column=2, padx=4, sticky="ew")
+
+    def _choose(self, choice: str):
+        self.action = choice
+        self.apply_all = bool(self.chk_all.get())
+        self.destroy()
+
+
+class FailureReportDialog(ctk.CTkToplevel):
+    """下載失敗項目清單與重試對話框"""
+    def __init__(self, parent, failed_items: list, retry_callback):
+        super().__init__(parent)
+        self.title("❌ 下載失敗項目報告與重試")
+        self.geometry("680x480")
+        self.minsize(560, 380)
+        self.transient(parent)
+        self.grab_set()
+
+        lbl_title = ctk.CTkLabel(
+            self,
+            text=f"⚠️ 下載完成，但有 {len(failed_items)} 個項目發生錯誤！",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#ef4444"
+        )
+        lbl_title.pack(padx=15, pady=(15, 4))
+
+        lbl_desc = ctk.CTkLabel(
+            self,
+            text="以下列出所有下載失敗的曲目與原因，您可以點擊下方按鈕直接一鍵重試：",
+            font=ctk.CTkFont(size=12),
+            text_color="#cbd5e1"
+        )
+        lbl_desc.pack(padx=15, pady=(0, 8))
+
+        scroll = ctk.CTkScrollableFrame(self, height=280)
+        scroll.pack(padx=15, pady=6, fill="both", expand=True)
+
+        for i, item in enumerate(failed_items, 1):
+            f_frame = ctk.CTkFrame(scroll, fg_color="#1e293b", corner_radius=6)
+            f_frame.pack(fill="x", padx=4, pady=4)
+
+            t_lbl = ctk.CTkLabel(
+                f_frame,
+                text=f"{i}. {item['title']}",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="w",
+                text_color="#f8fafc"
+            )
+            t_lbl.pack(padx=10, pady=(6, 2), anchor="w", fill="x")
+
+            err_text = item.get('error', '未知錯誤')
+            friendly_hint = ""
+            if "Private video" in err_text:
+                friendly_hint = "💡 [診斷：該影片為私人影片或已被發布者刪除]"
+            elif "Sign in to confirm" in err_text or "bot" in err_text.lower():
+                friendly_hint = "💡 [診斷：伺服器觸發機器人驗證機制]"
+            elif "HTTP Error 403" in err_text:
+                friendly_hint = "💡 [診斷：HTTP 403 存取受限，重試或稍後再試通常可解決]"
+            elif "timed out" in err_text.lower():
+                friendly_hint = "💡 [診斷：網路連線逾時]"
+
+            e_lbl = ctk.CTkLabel(
+                f_frame,
+                text=f"錯誤原因：{err_text[:140]}... {friendly_hint}",
+                font=ctk.CTkFont(size=11),
+                anchor="w",
+                text_color="#f87171",
+                justify="left",
+                wraplength=600
+            )
+            e_lbl.pack(padx=10, pady=(0, 6), anchor="w", fill="x")
+
+        btn_box = ctk.CTkFrame(self, fg_color="transparent")
+        btn_box.pack(padx=15, pady=(8, 15), fill="x")
+
+        btn_retry = ctk.CTkButton(
+            btn_box,
+            text=f"🔄 立即重試這 {len(failed_items)} 個失敗項目",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            height=38,
+            command=lambda: [self.destroy(), retry_callback()]
+        )
+        btn_retry.pack(side="left", padx=(0, 8), expand=True, fill="x")
+
+        btn_close = ctk.CTkButton(
+            btn_box,
+            text="關閉",
+            width=90,
+            height=38,
+            fg_color="#475569",
+            hover_color="#64748b",
+            command=self.destroy
+        )
+        btn_close.pack(side="right")
+
+
+class AboutDialog(ctk.CTkToplevel):
+    """關於 StreamForge、版權宣告、授權條款與自動更新對話框"""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("ℹ️ 關於 StreamForge · 智慧財產權與免責聲明")
+        self.geometry("640x580")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        self.cfg = load_app_config()
+        self.install_date_str = get_install_date_str()
+
+        # 頂部 Logo 與標題
+        lbl_logo = ctk.CTkLabel(
+            self,
+            text="⚡ StreamForge",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color="#38bdf8"
+        )
+        lbl_logo.pack(padx=20, pady=(14, 2))
+
+        lbl_version = ctk.CTkLabel(
+            self,
+            text=f"Version {APP_VERSION} (Windows 64-bit 正式版) · 串流影音工坊",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8"
+        )
+        lbl_version.pack(padx=20, pady=(0, 6))
+
+        # 頁籤容器
+        tabview = ctk.CTkTabview(self, width=600, height=410)
+        tabview.pack(padx=20, pady=(0, 10), fill="both", expand=True)
+
+        tab_about = tabview.add("🏢 關於我們")
+        tab_disclaimer = tabview.add("⚖️ 法律免責聲明")
+        tab_license = tabview.add("📜 授權合約 (MIT)")
+
+        # ------------------ Tab 1: 關於我們 ------------------
+        info_card = ctk.CTkFrame(tab_about, fg_color="#1e293b", corner_radius=8)
+        info_card.pack(padx=10, pady=8, fill="x")
+
+        items = [
+            ("🏷️ 產品名稱", "StreamForge (串流影音工坊)"),
+            ("📅 安裝日期", self.install_date_str),
+            ("👥 開發團隊", "The StreamForge Team & Contributors"),
+            ("📜 軟體授權", "MIT License (開放原始碼自由使用)"),
+            ("© 智慧財產權", "© 2026 The StreamForge Team. All Rights Reserved."),
+            ("🌐 官方專案", f"https://github.com/{GITHUB_REPO}")
+        ]
+
+        for label, val in items:
+            row_f = ctk.CTkFrame(info_card, fg_color="transparent")
+            row_f.pack(fill="x", padx=12, pady=3)
+            ctk.CTkLabel(row_f, text=label, font=ctk.CTkFont(size=12, weight="bold"), width=110, anchor="w", text_color="#38bdf8").pack(side="left")
+            ctk.CTkLabel(row_f, text=val, font=ctk.CTkFont(size=12), anchor="w", text_color="#f1f5f9").pack(side="left", fill="x", expand=True)
+
+        # 更新設定與手動檢查卡片
+        update_card = ctk.CTkFrame(tab_about, fg_color="#0f172a", corner_radius=8)
+        update_card.pack(padx=10, pady=8, fill="x")
+
+        self.var_autocheck = tk.BooleanVar(value=self.cfg.get("auto_check_update", True))
+        chk_autoupdate = ctk.CTkCheckBox(
+            update_card,
+            text="☑️ 啟動應用程式時自動檢查最新發布版本 (Auto-check updates)",
+            variable=self.var_autocheck,
+            font=ctk.CTkFont(size=12),
+            command=self._on_toggle_autocheck
+        )
+        chk_autoupdate.pack(padx=12, pady=(10, 8), anchor="w")
+
+        btn_row = ctk.CTkFrame(update_card, fg_color="transparent")
+        btn_row.pack(fill="x", padx=12, pady=(0, 10))
+
+        btn_check_now = ctk.CTkButton(
+            btn_row,
+            text="🔄 立即檢查更新",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            width=130,
+            height=32,
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=lambda: check_for_updates(parent=self, silent=False)
+        )
+        btn_check_now.pack(side="left", padx=(0, 8))
+
+        btn_open_repo = ctk.CTkButton(
+            btn_row,
+            text="🌐 前往 Releases 頁面",
+            font=ctk.CTkFont(size=12),
+            width=140,
+            height=32,
+            fg_color="#334155",
+            hover_color="#475569",
+            command=lambda: webbrowser.open(GITHUB_RELEASES_URL)
+        )
+        btn_open_repo.pack(side="left")
+
+        # ------------------ Tab 2: 法律免責聲明 ------------------
+        disclaimer_text = (
+            "【法律免責聲明 (Legal Disclaimer)】\n\n"
+            "1. 【開源目的與合理使用】\n"
+            "   本工具為開放原始碼專案，開發目的僅供個人學習、研究、合理使用 (Fair Use)\n"
+            "   以及備份個人已取得授權或合法擁有之影音媒體內容。\n\n"
+            "2. 【無伺服器與無代管保證】\n"
+            "   StreamForge 為純客戶端本地工具，不提供、不儲存、亦不分發或代管任何\n"
+            "   受著作權保護之媒體內容與資料庫。\n\n"
+            "3. 【智慧財產權與商標歸屬】\n"
+            "   所有透過本工具下載之影音內容，其著作權、商標權及其他各項智慧財產權，\n"
+            "   均完整歸屬於原創作者、版權持有人及各來源串流平台所有。\n\n"
+            "4. 【使用者之完全法律責任】\n"
+            "   使用者使用本軟體下載或轉檔時，應嚴格遵守所在國家/地區之智慧財產權法規\n"
+            "   及各串流平台之服務使用條款。任何因未經授權之商業利用、重製或二次散佈行為\n"
+            "   所衍生之一切法律糾紛或民刑事責任，概由使用者本人完全承擔，\n"
+            "   開發團隊不承擔任何直接、間接或連帶賠償責任。"
+        )
+        txt_disclaimer = ctk.CTkTextbox(tab_disclaimer, font=ctk.CTkFont(family="Consolas", size=11), text_color="#e2e8f0")
+        txt_disclaimer.pack(fill="both", expand=True, padx=6, pady=6)
+        txt_disclaimer.insert("1.0", disclaimer_text)
+        txt_disclaimer.configure(state="disabled")
+
+        # ------------------ Tab 3: MIT License ------------------
+        license_text = (
+            "MIT License\n\n"
+            "Copyright (c) 2026 The StreamForge Team & Contributors\n\n"
+            "Permission is hereby granted, free of charge, to any person obtaining a copy\n"
+            "of this software and associated documentation files (the \"Software\"), to deal\n"
+            "in the Software without restriction, including without limitation the rights\n"
+            "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n"
+            "copies of the Software, and to permit persons to whom the Software is\n"
+            "furnished to do so, subject to the following conditions:\n\n"
+            "The above copyright notice and this permission notice shall be included in all\n"
+            "copies or substantial portions of the Software.\n\n"
+            "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n"
+            "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n"
+            "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n"
+            "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n"
+            "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n"
+            "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n"
+            "SOFTWARE."
+        )
+        txt_license = ctk.CTkTextbox(tab_license, font=ctk.CTkFont(family="Consolas", size=11), text_color="#cbd5e1")
+        txt_license.pack(fill="both", expand=True, padx=6, pady=6)
+        txt_license.insert("1.0", license_text)
+        txt_license.configure(state="disabled")
+
+        # 底部按鈕區
+        btn_box = ctk.CTkFrame(self, fg_color="transparent")
+        btn_box.pack(padx=20, pady=(0, 14), fill="x")
+
+        full_copy_text = f"StreamForge v{APP_VERSION}\n安裝日期: {self.install_date_str}\n\n{disclaimer_text}\n\n{license_text}"
+
+        btn_copy = ctk.CTkButton(
+            btn_box,
+            text="📋 複製免責與版權宣告",
+            font=ctk.CTkFont(size=12),
+            width=160,
+            height=34,
+            fg_color="#334155",
+            hover_color="#475569",
+            command=lambda: self._copy_info(parent, full_copy_text)
+        )
+        btn_copy.pack(side="left")
+
+        btn_close = ctk.CTkButton(
+            btn_box,
+            text="關閉",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            width=90,
+            height=34,
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=self.destroy
+        )
+        btn_close.pack(side="right")
+
+    def _on_toggle_autocheck(self):
+        val = self.var_autocheck.get()
+        self.cfg["auto_check_update"] = val
+        save_app_config(self.cfg)
+
+    def _copy_info(self, parent, text):
+        try:
+            parent.clipboard_clear()
+            parent.clipboard_append(text)
+            messagebox.showinfo("提示", "已將完整版權宣告與法律免責聲明複製至剪貼簿！")
+        except Exception:
+            pass
+
+
+class MediaDownloaderApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("StreamForge v1.0.0 · 串流影音工坊 (MP3 / MP4 · 命令終端版)")
+        self.geometry("1060 x 870")
+        self.minsize(920, 720)
+
+        # 預設儲存目錄（支援 EXE 打包環境與腳本環境）
+        if hasattr(sys, '_MEIPASS'):
+            self.default_download_dir = os.path.join(os.path.dirname(sys.executable), "downloads")
+        else:
+            self.default_download_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "downloads")
+        self.default_download_dir = os.path.abspath(self.default_download_dir)
+        os.makedirs(self.default_download_dir, exist_ok=True)
+
+        self.songs = []  # 儲存清單項目
+        self.song_widgets = []  # 儲存 UI 元件
+        self.is_running = False
+        self.is_paused = False
+        self.cancel_requested = False
+        self.pause_event = threading.Event()
+        self.pause_event.set()
+        self.next_number = 1  # 接續編號起點
+        self.duplicate_action_all = None  # 批次內套用全部的重複處理選項
+        self.failed_items = []  # 失敗歌曲資訊
+        self.console_visible = True
+        self.cmd_history = []
+        self.cmd_history_idx = -1
+
+        # 讀取使用者設定檔並在啟用時進行自動更新檢查
+        self.app_config = load_app_config()
+
+        self._build_ui()
+        self._detect_usb_drives()
+        self.log("🚀 StreamForge v1.0.0 就緒！© 2026 The StreamForge Team. All Rights Reserved.")
+        self.log("💡 可在下方輸入指令（輸入 'help' 查看所有可用指令），支援 ↑/↓ 鍵歷史紀錄。")
+
+        if self.app_config.get("auto_check_update", True):
+            self.after(1500, lambda: check_for_updates(parent=self, silent=True))
+
+    def _build_ui(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(3, weight=1)
+
+        # ================= 1. 頂部標題列 =================
+        header_frame = ctk.CTkFrame(self, corner_radius=10)
+        header_frame.grid(row=0, column=0, padx=15, pady=(12, 6), sticky="ew")
+        header_frame.grid_columnconfigure(0, weight=1)
+
+        # 標題與版權按鈕列
+        title_box = ctk.CTkFrame(header_frame, fg_color="transparent")
+        title_box.grid(row=0, column=0, padx=15, pady=(8, 2), sticky="ew")
+        title_box.grid_columnconfigure(0, weight=1)
+
+        title_lbl = ctk.CTkLabel(
+            title_box,
+            text="⚡ StreamForge · 串流影音工坊 (MP3 / MP4 · 命令終端版)",
+            font=ctk.CTkFont(size=20, weight="bold"),
+            text_color="#38bdf8"
+        )
+        title_lbl.pack(side="left")
+
+        btn_about = ctk.CTkButton(
+            title_box,
+            text="ℹ️ 關於我們 / 授權聲明",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            width=140,
+            height=26,
+            fg_color="#1e293b",
+            hover_color="#334155",
+            border_width=1,
+            border_color="#475569",
+            command=self.show_about_dialog
+        )
+        btn_about.pack(side="right")
+
+        sub_lbl = ctk.CTkLabel(
+            header_frame,
+            text="逐條加入 · 暫停/取消控制 · 資料夾查重防覆蓋 · 隨身碟 001 編號智慧檢查 · 即時命令列狀態 · 失敗詳細報告與重試",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8"
+        )
+        sub_lbl.grid(row=1, column=0, padx=15, pady=(0, 8), sticky="w")
+
+        # ================= 2. 單條輸入與加入區 =================
+        add_frame = ctk.CTkFrame(self, corner_radius=10)
+        add_frame.grid(row=1, column=0, padx=15, pady=4, sticky="ew")
+        add_frame.grid_columnconfigure(0, weight=1)
+
+        input_title = ctk.CTkLabel(
+            add_frame,
+            text="➕ 逐條加入網址（貼上後按 Enter 或點擊「加入清單」）：",
+            font=ctk.CTkFont(size=13, weight="bold")
+        )
+        input_title.grid(row=0, column=0, columnspan=4, padx=14, pady=(8, 4), sticky="w")
+
+        # 單行輸入框
+        self.entry_url = ctk.CTkEntry(
+            add_frame,
+            placeholder_text="在此貼上影音串流網址（支援單曲、短影片或播放清單），按 Enter 立即加入...",
+            font=ctk.CTkFont(size=13),
+            height=36
+        )
+        self.entry_url.grid(row=1, column=0, padx=(14, 6), pady=(0, 8), sticky="ew")
+        self.entry_url.bind("<Return>", lambda event: self.add_single_url())
+
+        # 加入按鈕
+        self.btn_add = ctk.CTkButton(
+            add_frame,
+            text="➕ 加入清單",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            width=100,
+            height=36,
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=self.add_single_url
+        )
+        self.btn_add.grid(row=1, column=1, padx=4, pady=(0, 8))
+
+        # 貼上剪貼簿按鈕
+        self.btn_paste = ctk.CTkButton(
+            add_frame,
+            text="📋 貼上剪貼簿",
+            width=100,
+            height=36,
+            fg_color="#334155",
+            hover_color="#475569",
+            command=self.paste_from_clipboard
+        )
+        self.btn_paste.grid(row=1, column=2, padx=4, pady=(0, 8))
+
+        # 範例按鈕
+        self.btn_sample = ctk.CTkButton(
+            add_frame,
+            text="✨ 測試範例",
+            width=85,
+            height=36,
+            fg_color="#334155",
+            hover_color="#475569",
+            command=self.add_sample_song
+        )
+        self.btn_sample.grid(row=1, column=3, padx=(4, 14), pady=(0, 8))
+
+        # ================= 3. 下載路徑、格式與編號設定區 =================
+        settings_frame = ctk.CTkFrame(self, corner_radius=10)
+        settings_frame.grid(row=2, column=0, padx=15, pady=4, sticky="ew")
+        settings_frame.grid_columnconfigure(1, weight=1)
+
+        # 第 1 列：儲存目錄與隨身碟捷徑
+        lbl_dir = ctk.CTkLabel(settings_frame, text="📁 下載目錄:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_dir.grid(row=0, column=0, padx=(14, 6), pady=(8, 4), sticky="w")
+
+        self.entry_dir = ctk.CTkEntry(settings_frame, font=ctk.CTkFont(size=12))
+        self.entry_dir.insert(0, self.default_download_dir)
+        self.entry_dir.grid(row=0, column=1, padx=6, pady=(8, 4), sticky="ew")
+
+        btn_browse = ctk.CTkButton(
+            settings_frame,
+            text="瀏覽...",
+            width=70,
+            fg_color="#475569",
+            command=self.browse_directory
+        )
+        btn_browse.grid(row=0, column=2, padx=4, pady=(8, 4))
+
+        self.btn_usb = ctk.CTkButton(
+            settings_frame,
+            text="💾 隨身碟",
+            width=85,
+            fg_color="#0369a1",
+            hover_color="#0284c7",
+            command=self.quick_select_usb
+        )
+        self.btn_usb.grid(row=0, column=3, padx=4, pady=(8, 4))
+
+        btn_open_folder = ctk.CTkButton(
+            settings_frame,
+            text="📂 開啟",
+            width=65,
+            fg_color="#475569",
+            command=self.open_download_folder
+        )
+        btn_open_folder.grid(row=0, column=4, padx=(4, 14), pady=(8, 4))
+
+        # 第 2 列：隨身碟/資料夾 001 編號智慧檢查列
+        num_box = ctk.CTkFrame(settings_frame, fg_color="transparent")
+        num_box.grid(row=1, column=0, columnspan=5, padx=14, pady=(0, 4), sticky="ew")
+
+        self.chk_numbering = ctk.CTkCheckBox(
+            num_box,
+            text="🔢 檔名前綴順序編號 (例如: 001 - 歌名.mp3，適合車載/隨身碟播放)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._on_numbering_toggled
+        )
+        self.chk_numbering.pack(side="left", padx=(0, 10))
+
+        self.btn_check_format = ctk.CTkButton(
+            num_box,
+            text="🔍 檢查資料夾格式 / 重新編號",
+            width=190,
+            height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color="#334155",
+            hover_color="#475569",
+            command=lambda: self.inspect_folder_format(user_triggered=True)
+        )
+        self.btn_check_format.pack(side="left", padx=4)
+
+        self.lbl_num_info = ctk.CTkLabel(
+            num_box,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color="#38bdf8"
+        )
+        self.lbl_num_info.pack(side="left", padx=10)
+
+        # 第 3 列：格式切換 (MP3 / MP4) 與音質/畫質設定
+        opts_box = ctk.CTkFrame(settings_frame, fg_color="transparent")
+        opts_box.grid(row=2, column=0, columnspan=5, padx=14, pady=(0, 6), sticky="ew")
+
+        lbl_format = ctk.CTkLabel(opts_box, text="📦 輸出格式:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_format.pack(side="left", padx=(0, 6))
+
+        self.seg_format = ctk.CTkSegmentedButton(
+            opts_box,
+            values=["🎵 MP3 (純音訊)", "🎬 MP4 (視訊影片)"],
+            command=self._on_format_changed,
+            width=200
+        )
+        self.seg_format.set("🎵 MP3 (純音訊)")
+        self.seg_format.pack(side="left", padx=(0, 14))
+
+        self.lbl_quality = ctk.CTkLabel(opts_box, text="🎧 音質位元率:", font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_quality.pack(side="left", padx=(0, 6))
+
+        self.opt_quality = ctk.CTkOptionMenu(
+            opts_box,
+            values=["320 kbps (最高品質/推薦)", "256 kbps (高質量)", "192 kbps (標準)", "128 kbps (輕巧)"],
+            width=180
+        )
+        self.opt_quality.pack(side="left", padx=(0, 14))
+
+        self.chk_thumb = ctk.CTkCheckBox(opts_box, text="🖼️ 嵌入封面縮圖", font=ctk.CTkFont(size=12))
+        self.chk_thumb.select()
+        self.chk_thumb.pack(side="left", padx=8)
+
+        self.chk_meta = ctk.CTkCheckBox(opts_box, text="🏷️ 嵌入標籤資訊", font=ctk.CTkFont(size=12))
+        self.chk_meta.select()
+        self.chk_meta.pack(side="left", padx=8)
+
+        # ================= 4. 歌曲清單管理與滾動展示區 =================
+        list_container = ctk.CTkFrame(self, corner_radius=10)
+        list_container.grid(row=3, column=0, padx=15, pady=4, sticky="nsew")
+        list_container.grid_columnconfigure(0, weight=1)
+        list_container.grid_rowconfigure(1, weight=1)
+
+        tool_bar = ctk.CTkFrame(list_container, fg_color="transparent")
+        tool_bar.grid(row=0, column=0, padx=14, pady=(6, 4), sticky="ew")
+        tool_bar.grid_columnconfigure(0, weight=1)
+
+        self.lbl_stats = ctk.CTkLabel(
+            tool_bar,
+            text="📊 待下載清單 (共 0 首 | 已選 0 首)",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#e2e8f0"
+        )
+        self.lbl_stats.pack(side="left")
+
+        # 重新嘗試失敗項目按鈕 (預設隱藏，有失敗時顯示)
+        self.btn_retry_failed = ctk.CTkButton(
+            tool_bar,
+            text="🔄 重試失敗項目",
+            width=115,
+            height=28,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            command=self.retry_failed_items
+        )
+
+        btn_clear_all = ctk.CTkButton(
+            tool_bar,
+            text="清空清單",
+            width=75,
+            height=28,
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            command=self.clear_song_list
+        )
+        btn_clear_all.pack(side="right", padx=(6, 0))
+
+        btn_deselect_all = ctk.CTkButton(
+            tool_bar,
+            text="⬜ 全不選",
+            width=75,
+            height=28,
+            fg_color="#475569",
+            command=self.deselect_all_songs
+        )
+        btn_deselect_all.pack(side="right", padx=6)
+
+        btn_select_all = ctk.CTkButton(
+            tool_bar,
+            text="☑️ 全選",
+            width=70,
+            height=28,
+            fg_color="#475569",
+            command=self.select_all_songs
+        )
+        btn_select_all.pack(side="right", padx=6)
+
+        self.scroll_list = ctk.CTkScrollableFrame(list_container, corner_radius=6)
+        self.scroll_list.grid(row=1, column=0, padx=10, pady=(2, 8), sticky="nsew")
+        self.scroll_list.grid_columnconfigure(1, weight=1)
+
+        self.lbl_empty = ctk.CTkLabel(
+            self.scroll_list,
+            text="清單目前是空的。\n請在上方貼上網址並點擊「➕ 加入清單」，一條一條累積您的下載清單！",
+            font=ctk.CTkFont(size=14),
+            text_color="#64748b"
+        )
+        self.lbl_empty.pack(pady=35)
+
+        # ================= 5. 命令模式即時終端 (Command Mode Log) =================
+        self.cmd_frame = ctk.CTkFrame(self, corner_radius=10)
+        self.cmd_frame.grid(row=4, column=0, padx=15, pady=4, sticky="ew")
+        self.cmd_frame.grid_columnconfigure(0, weight=1)
+
+        cmd_top = ctk.CTkFrame(self.cmd_frame, fg_color="transparent")
+        cmd_top.grid(row=0, column=0, padx=12, pady=(6, 2), sticky="ew")
+        cmd_top.grid_columnconfigure(0, weight=1)
+
+        self.lbl_cmd_title = ctk.CTkLabel(
+            cmd_top,
+            text="💻 即時命令列狀態 (Command Mode Log)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#38bdf8"
+        )
+        self.lbl_cmd_title.pack(side="left")
+
+        self.chk_autoscroll = ctk.CTkCheckBox(cmd_top, text="自動滾動", font=ctk.CTkFont(size=11), width=18)
+        self.chk_autoscroll.select()
+        self.chk_autoscroll.pack(side="right", padx=(6, 0))
+
+        btn_copy_log = ctk.CTkButton(
+            cmd_top,
+            text="📋 複製",
+            width=60,
+            height=24,
+            font=ctk.CTkFont(size=11),
+            fg_color="#334155",
+            hover_color="#475569",
+            command=self.copy_log_to_clipboard
+        )
+        btn_copy_log.pack(side="right", padx=4)
+
+        btn_clear_log = ctk.CTkButton(
+            cmd_top,
+            text="🧹 清除",
+            width=60,
+            height=24,
+            font=ctk.CTkFont(size=11),
+            fg_color="#334155",
+            hover_color="#475569",
+            command=self.clear_log
+        )
+        btn_clear_log.pack(side="right", padx=4)
+
+        self.btn_toggle_cmd = ctk.CTkButton(
+            cmd_top,
+            text="收合 ▲",
+            width=55,
+            height=24,
+            font=ctk.CTkFont(size=11),
+            fg_color="#1e293b",
+            hover_color="#334155",
+            command=self.toggle_command_console
+        )
+        self.btn_toggle_cmd.pack(side="right", padx=4)
+
+        self.txt_cmd = ctk.CTkTextbox(
+            self.cmd_frame,
+            height=110,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            fg_color="#090d16",
+            text_color="#e2e8f0"
+        )
+        self.txt_cmd.grid(row=1, column=0, padx=10, pady=(2, 4), sticky="ew")
+
+        # 指令輸入列 (CLI Prompt)
+        self.cmd_input_box = ctk.CTkFrame(self.cmd_frame, fg_color="transparent")
+        self.cmd_input_box.grid(row=2, column=0, padx=10, pady=(0, 6), sticky="ew")
+        self.cmd_input_box.grid_columnconfigure(1, weight=1)
+
+        prompt_lbl = ctk.CTkLabel(
+            self.cmd_input_box,
+            text="❯",
+            font=ctk.CTkFont(family="Consolas", size=14, weight="bold"),
+            text_color="#10b981",
+            width=18
+        )
+        prompt_lbl.grid(row=0, column=0, padx=(2, 4), sticky="w")
+
+        self.cmd_input = ctk.CTkEntry(
+            self.cmd_input_box,
+            placeholder_text="輸入指令 (輸入 'help' 查看指令清單，支援 ↑/↓ 歷史紀錄)...",
+            font=ctk.CTkFont(family="Consolas", size=12),
+            height=28
+        )
+        self.cmd_input.grid(row=0, column=1, padx=(0, 6), sticky="ew")
+        self.cmd_input.bind("<Return>", lambda event: self.handle_console_command())
+        self.cmd_input.bind("<Up>", self._on_cmd_history_up)
+        self.cmd_input.bind("<Down>", self._on_cmd_history_down)
+
+        self.btn_exec_cmd = ctk.CTkButton(
+            self.cmd_input_box,
+            text="執行",
+            width=50,
+            height=28,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=self.handle_console_command
+        )
+        self.btn_exec_cmd.grid(row=0, column=2, sticky="e")
+
+        # ================= 6. 底部執行、進度條與控制列 =================
+        bottom_frame = ctk.CTkFrame(self, corner_radius=10)
+        bottom_frame.grid(row=5, column=0, padx=15, pady=(4, 12), sticky="ew")
+        bottom_frame.grid_columnconfigure(0, weight=1)
+
+        self.lbl_status = ctk.CTkLabel(
+            bottom_frame,
+            text="系統就緒，等待加入網址",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8",
+            anchor="w"
+        )
+        self.lbl_status.grid(row=0, column=0, padx=15, pady=(6, 2), sticky="ew")
+
+        self.prog_bar = ctk.CTkProgressBar(bottom_frame)
+        self.prog_bar.set(0)
+        self.prog_bar.grid(row=1, column=0, padx=15, pady=3, sticky="ew")
+
+        # 按鈕容器（包含主下載按鈕與暫停/取消控制）
+        self.action_box = ctk.CTkFrame(bottom_frame, fg_color="transparent")
+        self.action_box.grid(row=2, column=0, padx=15, pady=(4, 8), sticky="ew")
+        self.action_box.grid_columnconfigure(0, weight=1)
+
+        # 靜態下載按鈕
+        self.btn_download = ctk.CTkButton(
+            self.action_box,
+            text="🚀 一次下載清單中所有選取的項目 (轉為 MP3)",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            height=42,
+            fg_color="#10b981",
+            hover_color="#059669",
+            command=self.start_download_batch
+        )
+        self.btn_download.grid(row=0, column=0, sticky="ew")
+
+        # 執行中控制列 (暫停 / 取消)
+        self.run_controls_frame = ctk.CTkFrame(self.action_box, fg_color="transparent")
+        self.run_controls_frame.grid_columnconfigure((0, 1), weight=1)
+
+        self.btn_pause = ctk.CTkButton(
+            self.run_controls_frame,
+            text="⏸️ 暫停下載",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=42,
+            fg_color="#f59e0b",
+            hover_color="#d97706",
+            command=self.toggle_pause
+        )
+        self.btn_pause.grid(row=0, column=0, padx=(0, 6), sticky="ew")
+
+        self.btn_cancel = ctk.CTkButton(
+            self.run_controls_frame,
+            text="⏹️ 取消下載",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=42,
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            command=self.cancel_download
+        )
+        self.btn_cancel.grid(row=0, column=1, padx=(6, 0), sticky="ew")
+
+        # 底部版權宣告列
+        lbl_footer = ctk.CTkLabel(
+            bottom_frame,
+            text="© 2026 The StreamForge Team & Contributors. All Rights Reserved. · MIT Open Source License",
+            font=ctk.CTkFont(size=11),
+            text_color="#64748b"
+        )
+        lbl_footer.grid(row=3, column=0, padx=15, pady=(2, 6))
+
+    def show_about_dialog(self):
+        AboutDialog(self)
+
+    # ================= 命令模式日誌功能 =================
+
+    def log(self, msg: str):
+        """線程安全的即時日誌紀錄"""
+        now_str = datetime.now().strftime("%H:%M:%S")
+        line = f"[{now_str}] {msg}\n"
+
+        def _append():
+            if hasattr(self, 'txt_cmd') and self.txt_cmd.winfo_exists():
+                self.txt_cmd.insert("end", line)
+                if self.chk_autoscroll.get():
+                    self.txt_cmd.see("end")
+
+        self.after(0, _append)
+
+    def clear_log(self):
+        self.txt_cmd.delete("1.0", "end")
+
+    def copy_log_to_clipboard(self):
+        try:
+            content = self.txt_cmd.get("1.0", "end").strip()
+            if content:
+                self.clipboard_clear()
+                self.clipboard_append(content)
+                messagebox.showinfo("提示", "已將命令列日誌複製至剪貼簿！")
+            else:
+                messagebox.showinfo("提示", "日誌目前是空的。")
+        except Exception as ex:
+            messagebox.showerror("錯誤", f"複製失敗：{ex}")
+
+    def toggle_command_console(self):
+        if self.console_visible:
+            self.txt_cmd.grid_remove()
+            self.cmd_input_box.grid_remove()
+            self.btn_toggle_cmd.configure(text="展開 ▼")
+            self.console_visible = False
+        else:
+            self.txt_cmd.grid(row=1, column=0, padx=10, pady=(2, 4), sticky="ew")
+            self.cmd_input_box.grid(row=2, column=0, padx=10, pady=(0, 6), sticky="ew")
+            self.btn_toggle_cmd.configure(text="收合 ▲")
+            self.console_visible = True
+
+    # ================= 終端機指令互動邏輯 (CLI System) =================
+
+    def _on_cmd_history_up(self, event):
+        if not self.cmd_history:
+            return "break"
+        if self.cmd_history_idx == -1:
+            self.cmd_history_idx = len(self.cmd_history) - 1
+        elif self.cmd_history_idx > 0:
+            self.cmd_history_idx -= 1
+        
+        self.cmd_input.delete(0, tk.END)
+        self.cmd_input.insert(0, self.cmd_history[self.cmd_history_idx])
+        return "break"
+
+    def _on_cmd_history_down(self, event):
+        if not self.cmd_history:
+            return "break"
+        if self.cmd_history_idx != -1:
+            if self.cmd_history_idx < len(self.cmd_history) - 1:
+                self.cmd_history_idx += 1
+                self.cmd_input.delete(0, tk.END)
+                self.cmd_input.insert(0, self.cmd_history[self.cmd_history_idx])
+            else:
+                self.cmd_history_idx = -1
+                self.cmd_input.delete(0, tk.END)
+        return "break"
+
+    def handle_console_command(self):
+        raw_cmd = self.cmd_input.get().strip()
+        if not raw_cmd:
+            return
+
+        self.cmd_input.delete(0, tk.END)
+        self.cmd_history.append(raw_cmd)
+        self.cmd_history_idx = -1
+
+        self.log(f"❯ {raw_cmd}")
+
+        parts = raw_cmd.split()
+        cmd = parts[0].lower()
+        args = parts[1:]
+
+        if cmd in ("help", "?", "h"):
+            self._cli_help()
+        elif cmd in ("add", "a"):
+            self._cli_add(args)
+        elif cmd in ("paste", "p"):
+            self.paste_from_clipboard()
+        elif cmd in ("list", "ls"):
+            self._cli_list()
+        elif cmd in ("select", "sel"):
+            self._cli_select(args)
+        elif cmd in ("del", "rm", "delete"):
+            self._cli_delete(args)
+        elif cmd in ("start", "dl", "run", "download"):
+            self._cli_start()
+        elif cmd == "pause":
+            self._cli_pause()
+        elif cmd == "resume":
+            self._cli_resume()
+        elif cmd in ("cancel", "stop"):
+            self._cli_cancel()
+        elif cmd in ("retry", "r"):
+            self._cli_retry()
+        elif cmd in ("format", "fmt"):
+            self._cli_format(args)
+        elif cmd in ("quality", "q"):
+            self._cli_quality(args)
+        elif cmd in ("dir", "cd"):
+            self._cli_dir(args)
+        elif cmd == "usb":
+            self.quick_select_usb()
+        elif cmd == "check":
+            self.inspect_folder_format(user_triggered=True)
+        elif cmd in ("number", "num"):
+            self._cli_number(args)
+        elif cmd in ("about", "copyright", "author", "team"):
+            self._cli_about()
+        elif cmd in ("update", "check-update", "upgrade"):
+            self.log("🔍 正在連線檢查 StreamForge 最新發布版本...")
+            check_for_updates(parent=self, silent=False)
+        elif cmd == "open":
+            self.open_download_folder()
+        elif cmd == "status":
+            self._cli_status()
+        elif cmd in ("clear", "cls"):
+            self.clear_log()
+        elif cmd in ("exit", "quit"):
+            self.destroy()
+        else:
+            self.log(f"❌ [CLI 錯誤] 未知指令: '{cmd}'。輸入 'help' 查看所有可用指令。")
+
+    def _cli_about(self):
+        banner = (
+            "=========================================================\n"
+            "  ⚡ StreamForge v1.0.0 (Release Build)\n"
+            "  High-Performance Media Stream & Audio Processing Utility\n\n"
+            "  © 2026 The StreamForge Team & Contributors.\n"
+            "  All Rights Reserved. 保留所有權利。\n\n"
+            "  Licensed under the MIT License.\n"
+            "  For personal research, study, and fair-use only.\n"
+            "========================================================="
+        )
+        self.log(banner)
+
+    def _cli_help(self):
+        help_text = (
+            "================== 💻 終端機控制台可用指令 ==================\n"
+            "  about / copyright         : 顯示 StreamForge 軟體版本與智慧財產權宣告\n"
+            "  update / check-update     : 檢查 StreamForge 最新版本與更新\n"
+            "  add <網址> / a <網址>       : 加入單曲或播放清單網址至清單\n"
+            "  paste / p                 : 從剪貼簿讀取網址並加入\n"
+            "  list / ls                 : 列出當前清單所有歌曲與下載狀態\n"
+            "  select <all|none|編號...>  : 選取或反選 (如: select all, select 1 3)\n"
+            "  del <all|編號...> / rm     : 從清單中刪除歌曲 (如: del 2, del all)\n"
+            "  start / dl / run          : 開始批次下載所有已勾選的歌曲\n"
+            "  pause                     : 暫停當前下載任務\n"
+            "  resume                    : 恢復已暫停的下載任務\n"
+            "  cancel / stop             : 取消當前的下載任務\n"
+            "  retry / r                 : 重新下載所有失敗的項目\n"
+            "  format <mp3|mp4> / fmt    : 切換輸出格式 (mp3 或 mp4)\n"
+            "  quality <數值> / q <數值>  : 設定音質(320/256/192/128)或畫質(best/1080/720)\n"
+            "  dir [路徑] / cd [路徑]     : 顯示或更換下載儲存目錄\n"
+            "  usb                       : 自動偵測並切換至 USB 隨身碟\n"
+            "  check                     : 檢查資料夾中的 001 編號格式\n"
+            "  number <on|off>           : 開啟或關閉 001 檔名前綴順序編號\n"
+            "  open                      : 在檔案總管中開啟當前下載目錄\n"
+            "  status                    : 顯示目前設定與清單統計摘要\n"
+            "  clear / cls               : 清除終端機畫面\n"
+            "  exit / quit               : 關閉程式\n"
+            "========================================================="
+        )
+        self.log(help_text)
+
+    def _cli_add(self, args):
+        if not args:
+            self.log("⚠️ [CLI 提示] 請在指令後帶入網址，例如: add https://www.youtube.com/watch?v=...")
+            return
+        url = args[0]
+        self.entry_url.delete(0, tk.END)
+        self.entry_url.insert(0, url)
+        self.add_single_url()
+
+    def _cli_list(self):
+        if not self.songs:
+            self.log("📭 [CLI] 清單目前是空的。可使用 'add <網址>' 加入歌曲。")
+            return
+        self.log(f"📋 [CLI] 當前清單共 {len(self.songs)} 首歌曲：")
+        for i, s in enumerate(self.songs, 1):
+            chk = "✓" if s['var'].get() else " "
+            status_txt = s.get('status', '等待中')
+            if 'status_lbl' in s and s['status_lbl'].winfo_exists():
+                status_txt = s['status_lbl'].cget("text")
+            self.log(f"  [{chk}] {i:02d}. {s['title']} ({s['duration_str']}) [{status_txt}]")
+
+    def _cli_select(self, args):
+        if not args or args[0].lower() in ("all", "a", "*"):
+            self.select_all_songs()
+            self.log("✅ [CLI] 已全選清單中所有歌曲。")
+        elif args[0].lower() in ("none", "no", "clear", "0"):
+            self.deselect_all_songs()
+            self.log("⬜ [CLI] 已取消勾選所有歌曲。")
+        else:
+            indices = set()
+            for arg in args:
+                if "-" in arg:
+                    parts = arg.split("-")
+                    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                        start, end = int(parts[0]), int(parts[1])
+                        for n in range(start, end + 1):
+                            indices.add(n)
+                elif arg.isdigit():
+                    indices.add(int(arg))
+
+            if not indices:
+                self.log("⚠️ [CLI 提示] 無效的選取參數。用法: select all 或 select 1 2 3 或 select 1-5")
+                return
+
+            for i, s in enumerate(self.songs, 1):
+                s['var'].set(i in indices)
+            self.update_stats()
+            self.log(f"✅ [CLI] 已選取指定編號的項目: {sorted(list(indices))}")
+
+    def _cli_delete(self, args):
+        if not args:
+            self.log("⚠️ [CLI 提示] 請指定要刪除的歌曲編號或 all，例如: del 2 或 del all")
+            return
+        if args[0].lower() in ("all", "clear"):
+            self.clear_song_list()
+        else:
+            to_remove_indices = []
+            for arg in args:
+                if arg.isdigit():
+                    idx = int(arg) - 1
+                    if 0 <= idx < len(self.songs):
+                        to_remove_indices.append(idx)
+
+            if not to_remove_indices:
+                self.log("⚠️ [CLI 提示] 找不到指定的歌曲編號。")
+                return
+
+            to_remove_indices.sort(reverse=True)
+            for idx in to_remove_indices:
+                s = self.songs[idx]
+                rf = s.get('row_widget')
+                self.remove_single_song(s, rf)
+            self.log(f"🗑️ [CLI] 已從清單刪除指定項目。")
+
+    def _cli_start(self):
+        if self.is_running:
+            self.log("⚠️ [CLI] 任務已在執行中！")
+            return
+        self.start_download_batch()
+
+    def _cli_pause(self):
+        if not self.is_running:
+            self.log("⚠️ [CLI] 目前沒有正在執行的下載任務。")
+            return
+        if not self.is_paused:
+            self.toggle_pause()
+        else:
+            self.log("ℹ️ [CLI] 下載任務目前已是暫停狀態。")
+
+    def _cli_resume(self):
+        if not self.is_running:
+            self.log("⚠️ [CLI] 目前沒有正在執行的下載任務。")
+            return
+        if self.is_paused:
+            self.toggle_pause()
+        else:
+            self.log("ℹ️ [CLI] 下載任務目前正在執行中，未處於暫停狀態。")
+
+    def _cli_cancel(self):
+        if not self.is_running:
+            self.log("⚠️ [CLI] 目前沒有正在執行的下載任務。")
+            return
+        self.cancel_download()
+
+    def _cli_retry(self):
+        self.retry_failed_items()
+
+    def _cli_format(self, args):
+        if not args:
+            curr = self.seg_format.get()
+            self.log(f"ℹ️ [CLI] 目前輸出格式為: {curr}。切換請輸入: format mp3 或 format mp4")
+            return
+        target = args[0].lower()
+        if "mp4" in target or "video" in target:
+            self.seg_format.set("🎬 MP4 (視訊影片)")
+            self._on_format_changed("🎬 MP4 (視訊影片)")
+            self.log("🎬 [CLI] 輸出格式已切換為: MP4 視訊影片")
+        elif "mp3" in target or "audio" in target:
+            self.seg_format.set("🎵 MP3 (純音訊)")
+            self._on_format_changed("🎵 MP3 (純音訊)")
+            self.log("🎵 [CLI] 輸出格式已切換為: MP3 純音訊")
+        else:
+            self.log("⚠️ [CLI 錯誤] 未知的格式。請輸入: format mp3 或 format mp4")
+
+    def _cli_quality(self, args):
+        if not args:
+            curr = self.opt_quality.get()
+            self.log(f"ℹ️ [CLI] 目前品質設定為: {curr}")
+            return
+        val = args[0].lower()
+        fmt = self.seg_format.get()
+        if "MP4" in fmt:
+            mapping = {
+                "best": "最高畫質 (最佳/推薦)",
+                "max": "最高畫質 (最佳/推薦)",
+                "1080": "1080p (Full HD)",
+                "1080p": "1080p (Full HD)",
+                "720": "720p (HD)",
+                "720p": "720p (HD)",
+                "480": "480p (標清)",
+                "480p": "480p (標清)",
+                "360": "360p (節省空間)",
+                "360p": "360p (節省空間)",
+            }
+            if val in mapping:
+                self.opt_quality.set(mapping[val])
+                self.log(f"📺 [CLI] MP4 影片畫質已設定為: {mapping[val]}")
+            else:
+                self.log("⚠️ [CLI 錯誤] MP4 可用品質: best, 1080, 720, 480, 360")
+        else:
+            mapping = {
+                "320": "320 kbps (最高品質/推薦)",
+                "320k": "320 kbps (最高品質/推薦)",
+                "256": "256 kbps (高質量)",
+                "256k": "256 kbps (高質量)",
+                "192": "192 kbps (標準)",
+                "192k": "192 kbps (標準)",
+                "128": "128 kbps (輕巧)",
+                "128k": "128 kbps (輕巧)",
+            }
+            if val in mapping:
+                self.opt_quality.set(mapping[val])
+                self.log(f"🎧 [CLI] MP3 音質位元率已設定為: {mapping[val]}")
+            else:
+                self.log("⚠️ [CLI 錯誤] MP3 可用音質: 320, 256, 192, 128")
+
+    def _cli_dir(self, args):
+        if not args:
+            self.log(f"📁 [CLI] 目前下載儲存目錄為: {self.entry_dir.get()}")
+            return
+        new_dir = " ".join(args).strip('"').strip("'")
+        if not os.path.exists(new_dir):
+            try:
+                os.makedirs(new_dir, exist_ok=True)
+            except Exception as ex:
+                self.log(f"❌ [CLI 錯誤] 無法建立目錄: {ex}")
+                return
+        self.entry_dir.delete(0, tk.END)
+        self.entry_dir.insert(0, new_dir)
+        self.log(f"📁 [CLI] 下載目錄已更換為: {new_dir}")
+        self.inspect_folder_format(user_triggered=False)
+
+    def _cli_number(self, args):
+        if not args:
+            curr = "開啟" if self.chk_numbering.get() else "關閉"
+            self.log(f"🔢 [CLI] 檔名前綴 001 編號功能目前為: {curr}。可用指令: number on 或 number off")
+            return
+        state = args[0].lower()
+        if state in ("on", "1", "true", "yes"):
+            self.chk_numbering.select()
+            self._on_numbering_toggled()
+            self.log("🔢 [CLI] 已開啟 001 編號功能。")
+        elif state in ("off", "0", "false", "no"):
+            self.chk_numbering.deselect()
+            self._on_numbering_toggled()
+            self.log("🔢 [CLI] 已關閉 001 編號功能。")
+        else:
+            self.log("⚠️ [CLI 錯誤] 請輸入: number on 或 number off")
+
+    def _cli_status(self):
+        total = len(self.songs)
+        selected = sum(1 for s in self.songs if s['var'].get())
+        failed = sum(1 for s in self.songs if s.get('error'))
+        running_str = "下載中" if self.is_running else ("暫停中" if self.is_paused else "閒置")
+        num_str = f"開啟 (接續至 {self.next_number:03d})" if self.chk_numbering.get() else "關閉"
+        status_msg = (
+            "================== 📊 系統當前狀態摘要 ==================\n"
+            f"  執行狀態: {running_str}\n"
+            f"  歌曲清單: 共 {total} 首 (已勾選 {selected} 首 | 失敗 {failed} 首)\n"
+            f"  輸出格式: {self.seg_format.get()}\n"
+            f"  輸出品質: {self.opt_quality.get()}\n"
+            f"  順序編號: {num_str}\n"
+            f"  儲存目錄: {self.entry_dir.get()}\n"
+            "========================================================="
+        )
+        self.log(status_msg)
+
+    # ================= 隨身碟與資料夾編號智慧檢查 =================
+
+    def _detect_usb_drives(self):
+        drives = downloader.get_removable_drives()
+        if drives:
+            self.btn_usb.configure(text=f"💾 隨身碟 ({drives[0][0]}:)")
+            self.log(f"💾 偵測到可用的隨身碟代號: {', '.join(drives)}")
+        else:
+            self.btn_usb.configure(text="💾 隨身碟")
+
+    def quick_select_usb(self):
+        drives = downloader.get_removable_drives()
+        if not drives:
+            messagebox.showinfo("提示", "目前未偵測到插入的 USB 隨身碟！\n請插入隨身碟後再次點擊，或使用「瀏覽」按鈕手動選擇。")
+            return
+
+        target = drives[0]
+        self.entry_dir.delete(0, tk.END)
+        self.entry_dir.insert(0, target)
+        self.lbl_status.configure(text=f"已選取隨身碟: {target}")
+        self.log(f"已切換下載目標為隨身碟: {target}")
+        self.inspect_folder_format(user_triggered=False)
+
+    def _on_numbering_toggled(self):
+        if self.chk_numbering.get():
+            self.inspect_folder_format(user_triggered=False)
+        else:
+            self.lbl_num_info.configure(text="（不加入編號）")
+
+    def inspect_folder_format(self, user_triggered=False):
+        folder_path = self.entry_dir.get().strip()
+        if not os.path.exists(folder_path):
+            return
+
+        res = downloader.check_folder_numbering(folder_path)
+
+        if res['status'] == 'empty':
+            self.next_number = 1
+            if self.chk_numbering.get():
+                self.lbl_num_info.configure(text="（資料夾為空，新檔案將從 001 開始）")
+            if user_triggered:
+                messagebox.showinfo("檢查結果", f"資料夾為空或無現有音訊/影片檔案。\n新下載項目若啟用編號，將由 001 開始。")
+
+        elif res['status'] == 'already_numbered':
+            self.next_number = res['next_number']
+            self.chk_numbering.select()
+            self.lbl_num_info.configure(text=f"（已編號至 {res['next_number']-1:03d}，新檔將從 {self.next_number:03d} 開始）")
+            if user_triggered:
+                messagebox.showinfo(
+                    "格式正確",
+                    f"✅ 目標資料夾已完全符合 001, 002... 編號格式！\n"
+                    f"現有歌曲: {res['total_files']} 首\n"
+                    f"後續新下載將自動接續編號（由 {self.next_number:03d} 開始）。"
+                )
+
+        elif res['status'] == 'not_numbered':
+            un_count = len(res['un_numbered_files'])
+            total = res['total_files']
+
+            msg = (
+                f"【資料夾編號格式檢查】\n\n"
+                f"目標路徑：{folder_path}\n"
+                f"目前共有 {total} 個檔案，其中有 {un_count} 個尚未符合「001, 002...」編號格式。\n\n"
+                f"請問您是否要將現有檔案全部重新編號命名（Rename），並讓後續下載的歌曲接續編號？\n\n"
+                f"--------------------------------------------------\n"
+                f"• 點擊【是 (Yes)】：\n"
+                f"  系統將現有檔案全部重新命名為 001 - 檔名、002 - 檔名...\n"
+                f"  新下載的歌曲將自動接續編號（從 {total+1:03d} 開始）！\n\n"
+                f"• 點擊【否 (No)】：\n"
+                f"  保持現有檔案名稱不變，且新下載的歌曲「不加上任何數字編號」。"
+            )
+
+            ans = messagebox.askyesno("格式檢查與重新命名", msg)
+            if ans:
+                try:
+                    self.next_number = downloader.rename_folder_files_to_numbered(folder_path, start_number=1)
+                    self.chk_numbering.select()
+                    self.lbl_num_info.configure(text=f"（已重新編號，新檔將從 {self.next_number:03d} 開始）")
+                    self.log(f"✅ 目標資料夾現有 {total} 個檔案已全部重新編號命名完成！")
+                    messagebox.showinfo("成功", f"🎉 現有 {total} 個檔案已全部重新編號命名完成！\n新下載的歌曲將由 {self.next_number:03d} 接續。")
+                except Exception as ex:
+                    self.log(f"❌ 重新命名現有檔案失敗: {ex}")
+                    messagebox.showerror("錯誤", f"重新命名現有檔案時發生錯誤：\n{str(ex)}")
+            else:
+                self.chk_numbering.deselect()
+                self.lbl_num_info.configure(text="（不加入編號）")
+
+    # ================= 格式切換事件 =================
+
+    def _on_format_changed(self, value):
+        if "MP4" in value:
+            self.lbl_quality.configure(text="📺 影片解析度:")
+            self.opt_quality.configure(values=[
+                "最高畫質 (最佳/推薦)",
+                "1080p (Full HD)",
+                "720p (HD)",
+                "480p (標清)",
+                "360p (節省空間)"
+            ])
+            self.opt_quality.set("最高畫質 (最佳/推薦)")
+            self.chk_thumb.configure(state="disabled")
+            self.btn_download.configure(text="🚀 一次下載清單中所有選取的項目 (轉為 MP4 影片)")
+            self.log("切換為 🎬 MP4 視訊影片模式")
+        else:
+            self.lbl_quality.configure(text="🎧 音質位元率:")
+            self.opt_quality.configure(values=[
+                "320 kbps (最高品質/推薦)",
+                "256 kbps (高質量)",
+                "192 kbps (標準)",
+                "128 kbps (輕巧)"
+            ])
+            self.opt_quality.set("320 kbps (最高品質/推薦)")
+            self.chk_thumb.configure(state="normal")
+            self.btn_download.configure(text="🚀 一次下載清單中所有選取的項目 (轉為 MP3 音訊)")
+            self.log("切換為 🎵 MP3 純音訊模式")
+
+    # ================= 互動事件處理 =================
+
+    def paste_from_clipboard(self):
+        try:
+            clip = self.clipboard_get().strip()
+            if clip:
+                self.entry_url.delete(0, tk.END)
+                self.entry_url.insert(0, clip)
+                self.add_single_url()
+            else:
+                messagebox.showinfo("提示", "剪貼簿目前沒有內容！")
+        except Exception:
+            messagebox.showinfo("提示", "無法從剪貼簿讀取網址！")
+
+    def add_sample_song(self):
+        sample = "https://www.youtube.com/watch?v=k85mRPqvMbE"
+        self.entry_url.delete(0, tk.END)
+        self.entry_url.insert(0, sample)
+        self.add_single_url()
+
+    def browse_directory(self):
+        path = filedialog.askdirectory(title="選擇下載檔案儲存目錄", initialdir=self.entry_dir.get())
+        if path:
+            self.entry_dir.delete(0, tk.END)
+            self.entry_dir.insert(0, path)
+            self.log(f"已更換儲存目錄: {path}")
+            self.inspect_folder_format(user_triggered=False)
+
+    def open_download_folder(self):
+        target = self.entry_dir.get().strip()
+        if not os.path.exists(target):
+            os.makedirs(target, exist_ok=True)
+        try:
+            os.startfile(target)
+        except Exception as ex:
+            self.log(f"開啟資料夾失敗: {ex}")
+            messagebox.showerror("錯誤", f"無法開啟資料夾：{ex}")
+
+    def update_stats(self):
+        total = len(self.songs)
+        selected = sum(1 for s in self.songs if s['var'].get())
+        self.lbl_stats.configure(text=f"📊 待下載清單 (共 {total} 首 | 已選 {selected} 首)")
+
+    def select_all_songs(self):
+        for s in self.songs:
+            s['var'].set(True)
+        self.update_stats()
+
+    def deselect_all_songs(self):
+        for s in self.songs:
+            s['var'].set(False)
+        self.update_stats()
+
+    def clear_song_list(self):
+        if self.is_running:
+            messagebox.showwarning("提示", "正在執行下載任務，無法清空清單！")
+            return
+        if not self.songs:
+            return
+        if messagebox.askyesno("確認清空", "確定要清空目前清單中的所有歌曲嗎？"):
+            for w in self.song_widgets:
+                w.destroy()
+            self.song_widgets.clear()
+            self.songs.clear()
+            self.lbl_empty.pack(pady=35)
+            self.btn_retry_failed.pack_forget()
+            self.update_stats()
+            self.log("已清空歌曲清單。")
+
+    def remove_single_song(self, song_item, row_frame):
+        if self.is_running:
+            messagebox.showwarning("提示", "正在執行下載任務，無法移除歌曲！")
+            return
+        if song_item in self.songs:
+            self.songs.remove(song_item)
+        row_frame.destroy()
+        if not self.songs:
+            self.lbl_empty.pack(pady=35)
+            self.btn_retry_failed.pack_forget()
+        self.update_stats()
+
+    def show_single_error_detail(self, song):
+        """顯示單一歌曲失敗原因詳細視窗"""
+        err_msg = song.get('error', '未知錯誤')
+        msg = f"【下載失敗詳情】\n\n歌曲標題：{song['title']}\n網址：{song['url']}\n\n錯誤原因：\n{err_msg}\n\n是否立即單獨重新下載此首？"
+        if messagebox.askyesno("失敗詳情與重試", msg):
+            for s in self.songs:
+                s['var'].set(s == song)
+            self.update_stats()
+            self.start_download_batch()
+
+    def render_song_row(self, item):
+        self.lbl_empty.pack_forget()
+
+        row = ctk.CTkFrame(self.scroll_list, corner_radius=6, fg_color="#1e293b")
+        row.pack(fill="x", padx=4, pady=3)
+        row.grid_columnconfigure(1, weight=1)
+
+        # 勾選框
+        var = tk.BooleanVar(value=item.get('selected', True))
+        item['var'] = var
+        item['row_widget'] = row
+
+        chk = ctk.CTkCheckBox(row, text="", variable=var, width=24, command=self.update_stats)
+        chk.grid(row=0, column=0, rowspan=2, padx=(10, 6), pady=8)
+
+        # 歌曲名稱與資訊
+        idx = len(self.songs)
+        title_lbl = ctk.CTkLabel(
+            row,
+            text=f"{idx}. {item['title']}",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+            text_color="#f8fafc"
+        )
+        title_lbl.grid(row=0, column=1, padx=4, pady=(6, 2), sticky="w")
+
+        meta_lbl = ctk.CTkLabel(
+            row,
+            text=f"頻道: {item['uploader']}  |  長度: {item['duration_str']}",
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+            text_color="#94a3b8"
+        )
+        meta_lbl.grid(row=1, column=1, padx=4, pady=(0, 6), sticky="w")
+
+        # 狀態標籤（點擊失敗可查看原因）
+        status_lbl = ctk.CTkLabel(
+            row,
+            text="⏳ 等待中",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#cbd5e1",
+            width=110
+        )
+        status_lbl.grid(row=0, column=2, rowspan=2, padx=8, pady=8)
+        status_lbl.bind("<Button-1>", lambda event, it=item: self._on_status_clicked(it))
+        item['status_lbl'] = status_lbl
+
+        # 刪除按鈕
+        btn_del = ctk.CTkButton(
+            row,
+            text="✕",
+            width=28,
+            height=28,
+            fg_color="#334155",
+            hover_color="#ef4444",
+            command=lambda it=item, rf=row: self.remove_single_song(it, rf)
+        )
+        btn_del.grid(row=0, column=3, rowspan=2, padx=(4, 10), pady=8)
+
+        self.song_widgets.append(row)
+
+    def _on_status_clicked(self, song):
+        if song.get('error'):
+            self.show_single_error_detail(song)
+
+    # ================= 單條網址解析與加入 =================
+
+    def add_single_url(self):
+        raw_url = self.entry_url.get().strip()
+        if not raw_url:
+            messagebox.showwarning("提示", "請先輸入或貼上影音網址！")
+            return
+
+        if self.is_running:
+            messagebox.showwarning("提示", "正在執行下載任務，請稍候再加入！")
+            return
+
+        self.entry_url.delete(0, tk.END)
+        self.entry_url.focus_set()
+
+        self.btn_add.configure(state="disabled", text="🔍 解析中...")
+        self.lbl_status.configure(text=f"正在解析歌曲資訊: {raw_url[:50]}...")
+        self.log(f"開始解析網址資訊: {raw_url}")
+        self.prog_bar.set(0.2)
+
+        threading.Thread(target=self._worker_add_url, args=(raw_url,), daemon=True).start()
+
+    def _worker_add_url(self, url):
+        items = downloader.extract_single_url_info(url)
+        self.after(0, lambda: self._on_single_url_parsed(items, url))
+
+    def _on_single_url_parsed(self, items, url):
+        self.btn_add.configure(state="normal", text="➕ 加入清單")
+        self.prog_bar.set(0)
+
+        if not items:
+            self.lbl_status.configure(text="解析失敗，請確認網址正確性。")
+            self.log(f"❌ 解析失敗：無法讀取該網址 {url}")
+            messagebox.showerror("錯誤", f"無法從網址解析出曲目：\n{url}")
+            return
+
+        existing_ids = {s['id'] for s in self.songs}
+        added_count = 0
+
+        for item in items:
+            if item.get('status') == '解析失敗':
+                self.log(f"❌ 解析曲目失敗: {item.get('error', '未知錯誤')}")
+                messagebox.showerror("解析失敗", f"無法讀取該網址：\n{item.get('error', '未知錯誤')}")
+                continue
+
+            if item['id'] not in existing_ids:
+                self.songs.append(item)
+                self.render_song_row(item)
+                existing_ids.add(item['id'])
+                added_count += 1
+                self.log(f"➕ 已加入曲目: {item['title']} (頻道: {item['uploader']}, 長度: {item['duration_str']})")
+
+        self.update_stats()
+
+        if added_count > 0:
+            if len(items) == 1:
+                self.lbl_status.configure(text=f"✅ 已成功加入: {items[0]['title']}")
+            else:
+                self.lbl_status.configure(text=f"✅ 已成功從播放清單加入 {added_count} 首歌曲！")
+        else:
+            self.lbl_status.configure(text="⚠️ 該歌曲已在清單中，未重複加入。")
+
+    # ================= 批次下載、暫停、取消與查重 =================
+
+    def ask_duplicate_action(self, song_title: str, existing_filename: str):
+        """線程安全的重複檔案確認視窗"""
+        result = {'action': 'skip', 'apply_all': False}
+        ev = threading.Event()
+
+        def _show():
+            dlg = DuplicateDialog(self, song_title, existing_filename)
+            dlg.wait_window()
+            result['action'] = dlg.action
+            result['apply_all'] = dlg.apply_all
+            ev.set()
+
+        self.after(0, _show)
+        ev.wait()
+        return result['action'], result['apply_all']
+
+    def toggle_pause(self):
+        """暫停或恢復下載"""
+        if not self.is_running:
+            return
+        if self.is_paused:
+            self.is_paused = False
+            self.pause_event.set()
+            self.btn_pause.configure(text="⏸️ 暫停下載", fg_color="#f59e0b", hover_color="#d97706")
+            self.lbl_status.configure(text="▶️ 恢復下載中...")
+            self.log("▶️ 使用者恢復了下載任務")
+        else:
+            self.is_paused = True
+            self.pause_event.clear()
+            self.btn_pause.configure(text="▶️ 繼續下載", fg_color="#0284c7", hover_color="#0369a1")
+            self.lbl_status.configure(text="⏸️ 下載已暫停，點擊「繼續下載」以恢復")
+            self.log("⏸️ 使用者暫停了下載任務")
+
+    def cancel_download(self):
+        """取消下載任務"""
+        if not self.is_running:
+            return
+        if messagebox.askyesno("確認取消", "您確定要取消當前的下載任務嗎？\n已經下載完成的檔案將會保留。"):
+            self.cancel_requested = True
+            self.pause_event.set()
+            self.lbl_status.configure(text="⏹️ 正在取消下載任務...")
+            self.log("⏹️ 使用者確認取消下載任務")
+
+    def retry_failed_items(self):
+        """重試所有失敗的項目"""
+        failed = [s for s in self.songs if s.get('error')]
+        if not failed:
+            messagebox.showinfo("提示", "目前清單中沒有失敗的項目！")
+            return
+
+        for s in self.songs:
+            if s in failed:
+                s['var'].set(True)
+                s['error'] = None
+                self._update_song_status(s, "⏳ 等待重試", "#cbd5e1")
+            else:
+                s['var'].set(False)
+
+        self.update_stats()
+        self.log(f"🔄 準備重新嘗試下載 {len(failed)} 個失敗項目...")
+        self.start_download_batch()
+
+    def start_download_batch(self):
+        if self.is_running:
+            return
+
+        selected_songs = [s for s in self.songs if s['var'].get()]
+        if not selected_songs:
+            messagebox.showwarning("提示", "清單中沒有勾選任何歌曲！請先加入歌曲並勾選。")
+            return
+
+        output_dir = self.entry_dir.get().strip()
+        if not output_dir:
+            messagebox.showwarning("提示", "請指定下載儲存目錄！")
+            return
+
+        # 下載前確保檢查資料夾編號格式
+        use_numbering = bool(self.chk_numbering.get())
+        if use_numbering:
+            check_res = downloader.check_folder_numbering(output_dir)
+            if check_res['status'] == 'not_numbered':
+                self.inspect_folder_format(user_triggered=False)
+                use_numbering = bool(self.chk_numbering.get())
+            elif check_res['status'] == 'already_numbered':
+                self.next_number = check_res['next_number']
+
+        fmt_choice = self.seg_format.get()
+        format_type = "mp4" if "MP4" in fmt_choice else "mp3"
+
+        q_raw = self.opt_quality.get()
+        if format_type == "mp4":
+            if "最高" in q_raw or "最佳" in q_raw:
+                quality = "best"
+            elif "1080" in q_raw:
+                quality = "1080"
+            elif "720" in q_raw:
+                quality = "720"
+            elif "480" in q_raw:
+                quality = "480"
+            else:
+                quality = "360"
+        else:
+            quality = q_raw.split()[0]
+
+        embed_thumb = bool(self.chk_thumb.get()) and (format_type == "mp3")
+        embed_meta = bool(self.chk_meta.get())
+        start_num = self.next_number if use_numbering else None
+
+        self.is_running = True
+        self.is_paused = False
+        self.cancel_requested = False
+        self.pause_event.set()
+        self.duplicate_action_all = None
+        self.failed_items = []
+
+        # 切換按鈕為執行中狀態（暫停/取消）
+        self.btn_download.grid_remove()
+        self.run_controls_frame.grid(row=0, column=0, sticky="ew")
+        self.btn_pause.configure(text="⏸️ 暫停下載", fg_color="#f59e0b")
+        self.btn_add.configure(state="disabled")
+
+        self.log(f"🎬 開始批次下載任務：共 {len(selected_songs)} 首，格式: {format_type.upper()}，音質/畫質: {quality}")
+
+        threading.Thread(
+            target=self._worker_download,
+            args=(selected_songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num),
+            daemon=True
+        ).start()
+
+    def _worker_download(self, songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num):
+        total = len(songs)
+        success_count = 0
+        fail_count = 0
+        skip_count = 0
+        curr_num = start_num
+
+        for i, song in enumerate(songs, 1):
+            # 1. 檢查使用者是否已取消
+            if self.cancel_requested:
+                self.log("⏹️ 任務終止：使用者已取消下載。")
+                break
+
+            # 2. 檢查是否暫停中
+            while not self.pause_event.is_set():
+                if self.cancel_requested:
+                    break
+                time.sleep(0.2)
+            if self.cancel_requested:
+                self.log("⏹️ 任務終止：使用者已取消下載。")
+                break
+
+            # 3. 檢查目標資料夾內是否有重複檔案
+            target_ext = f".{format_type}"
+            dup = downloader.find_existing_duplicate(output_dir, song['title'], target_ext)
+            custom_stem = None
+            overwrite_flag = True
+
+            if dup:
+                dup_filename, dup_path = dup
+                self.log(f"🔍 [查重發現] 資料夾已有相似檔案: {dup_filename}")
+                if self.duplicate_action_all:
+                    action = self.duplicate_action_all
+                else:
+                    action, apply_all = self.ask_duplicate_action(song['title'], dup_filename)
+                    if apply_all:
+                        self.duplicate_action_all = action
+
+                if action == "skip":
+                    skip_count += 1
+                    self.log(f"⏭️ [略過] 使用者選擇略過: {song['title']}")
+                    self.after(0, lambda s=song: self._update_song_status(s, "⏭️ 已略過 (重複)", "#94a3b8"))
+                    pct = i / total
+                    self.after(0, lambda p=pct: self.prog_bar.set(p))
+                    continue
+
+                elif action == "suffix":
+                    prefix_str = f"{curr_num:03d} - " if curr_num is not None else ""
+                    safe_title = downloader.sanitize_filename(song['title'])
+                    custom_stem, _ = downloader.get_unique_suffix_stem(output_dir, prefix_str, safe_title, target_ext)
+                    self.log(f"➕ [後綴] 為避免衝突，產生新檔名: {custom_stem}{target_ext}")
+                    overwrite_flag = False
+
+                else:  # "overwrite"
+                    self.log(f"🔁 [覆蓋] 使用者選擇覆蓋舊檔: {dup_filename}")
+                    overwrite_flag = True
+
+            # 4. 開始執行下載
+            num_prefix = f"{curr_num:03d} - " if (curr_num is not None and not custom_stem) else ""
+            display_name = f"{custom_stem}{target_ext}" if custom_stem else f"{num_prefix}{song['title']}"
+
+            self.after(0, lambda s=song: self._update_song_status(s, "⚡ 下載中...", "#f59e0b"))
+            self.after(0, lambda idx=i, t=total, dn=display_name: self.lbl_status.configure(text=f"📥 [{idx}/{t}] 正在下載: {dn}"))
+            self.log(f"📥 [{i}/{total}] 正在處理: {display_name}")
+
+            try:
+                media_path = downloader.download_media(
+                    url=song['url'],
+                    output_dir=output_dir,
+                    format_type=format_type,
+                    quality=quality,
+                    embed_thumbnail=embed_thumb,
+                    embed_metadata=embed_meta,
+                    number_prefix=num_prefix if curr_num is not None and not custom_stem else None,
+                    custom_filename=custom_stem,
+                    overwrite=overwrite_flag,
+                    log_callback=self.log,
+                    cancel_check=lambda: self.cancel_requested
+                )
+                song['file_path'] = media_path
+                song['error'] = None
+                success_count += 1
+                if curr_num is not None:
+                    curr_num += 1
+                self.log(f"✅ 成功完成 [{i}/{total}]: {os.path.basename(media_path)}")
+                self.after(0, lambda s=song: self._update_song_status(s, "✅ 已完成", "#10b981"))
+
+            except Exception as ex:
+                if self.cancel_requested:
+                    self.after(0, lambda s=song: self._update_song_status(s, "⏹️ 已取消", "#64748b"))
+                    break
+                fail_count += 1
+                full_err = str(ex)
+                song['error'] = full_err
+                self.failed_items.append({'song': song, 'title': song['title'], 'url': song['url'], 'error': full_err})
+                self.log(f"❌ 下載失敗: {song['title']} | 原因: {full_err}")
+                self.after(0, lambda s=song: self._update_song_status(s, "❌ 失敗 (點擊看原因)", "#ef4444", error_clickable=True))
+
+            pct = i / total
+            self.after(0, lambda p=pct: self.prog_bar.set(p))
+
+        if curr_num is not None:
+            self.next_number = curr_num
+
+        self.after(0, lambda: self._on_download_finished(success_count, skip_count, fail_count, output_dir, format_type))
+
+    def _update_song_status(self, song, text, color, error_clickable=False):
+        if 'status_lbl' in song and song['status_lbl'].winfo_exists():
+            song['status_lbl'].configure(text=text, text_color=color)
+            if error_clickable:
+                song['status_lbl'].configure(cursor="hand2")
+            else:
+                song['status_lbl'].configure(cursor="")
+
+    def _on_download_finished(self, success_count, skip_count, fail_count, output_dir, format_type):
+        self.is_running = False
+        self.is_paused = False
+
+        # 切換回主下載按鈕
+        self.run_controls_frame.grid_remove()
+        self.btn_download.grid(row=0, column=0, sticky="ew")
+        self.btn_download.configure(state="normal")
+        self.btn_add.configure(state="normal")
+
+        if self.cancel_requested:
+            self.lbl_status.configure(text=f"⏹️ 任務已取消。成功: {success_count} 首，略過: {skip_count} 首，失敗: {fail_count} 首。")
+            self.log(f"⏹️ 下載已取消。統計: 成功 {success_count} 首 | 略過 {skip_count} 首 | 失敗 {fail_count} 首")
+        else:
+            self.prog_bar.set(1.0)
+            self.lbl_status.configure(text=f"🎉 任務完成！成功: {success_count} 首，略過: {skip_count} 首，失敗: {fail_count} 首。")
+            self.log(f"🎉 任務執行結束！成功: {success_count} 首 | 略過: {skip_count} 首 | 失敗: {fail_count} 首")
+
+        # 失敗重試按鈕更新
+        if fail_count > 0:
+            self.btn_retry_failed.configure(text=f"🔄 重試失敗 ({fail_count} 首)")
+            self.btn_retry_failed.pack(side="right", padx=6)
+        else:
+            self.btn_retry_failed.pack_forget()
+
+        # 刷新編號標籤提示
+        if self.chk_numbering.get():
+            self.lbl_num_info.configure(text=f"（已接續至 {self.next_number-1:03d}，下次將從 {self.next_number:03d} 開始）")
+
+        # 若有失敗項目，彈出詳細失敗診斷報告與重試對話框
+        if fail_count > 0:
+            FailureReportDialog(self, self.failed_items, self.retry_failed_items)
+        elif not self.cancel_requested:
+            msg = (
+                f"下載任務已全部完成！\n\n"
+                f"格式: {format_type.upper()}\n"
+                f"✅ 成功: {success_count} 個\n"
+                f"⏭️ 略過: {skip_count} 個\n"
+                f"❌ 失敗: {fail_count} 個\n\n"
+                f"檔案已存於: {output_dir}\n"
+                f"是否立即開啟下載資料夾？"
+            )
+            if messagebox.askyesno("下載完成", msg):
+                self.open_download_folder()
+
+
+if __name__ == "__main__":
+    app = MediaDownloaderApp()
+    app.mainloop()

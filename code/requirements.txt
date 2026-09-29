@@ -1,0 +1,6 @@
+customtkinter>=5.2.0
+yt-dlp>=2024.0.0
+static-ffmpeg>=2.5
+mutagen>=1.47.0
+streamlit>=1.30.0
+pyinstaller>=6.0.0

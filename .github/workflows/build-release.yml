@@ -1,0 +1,84 @@
+name: Build and Release StreamForge
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r code/requirements.txt
+          pip install pyinstaller static-ffmpeg
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $innoPath = "C:\Program Files (x86)\Inno Setup 6"
+          if (Test-Path $innoPath) {
+            echo "$innoPath" >> $env:GITHUB_PATH
+          }
+
+      - name: Setup FFmpeg binaries
+        shell: pwsh
+        run: |
+          python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
+          New-Item -ItemType Directory -Force -Path "code/ffmpeg_bin"
+          Get-Command ffmpeg | Select-Object -ExpandProperty Source | Copy-Item -Destination "code/ffmpeg_bin/ffmpeg.exe" -Force
+          Get-Command ffprobe | Select-Object -ExpandProperty Source | Copy-Item -Destination "code/ffmpeg_bin/ffprobe.exe" -Force
+
+      - name: Build Application Directory with PyInstaller
+        shell: pwsh
+        run: |
+          python -m PyInstaller --onedir --noconsole --name "StreamForge" --collect-all customtkinter --add-data "code/ffmpeg_bin;ffmpeg_bin" code/gui_app.py
+
+      - name: Compile Inno Setup Windows Installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" .github/installer/installer.iss
+
+      - name: Package Portable ZIP Archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/StreamForge" -DestinationPath "installer/StreamForge-v1.0.0-Portable.zip" -Force
+
+      - name: Calculate SHA-256 Checksums
+        shell: pwsh
+        run: |
+          $setupHash = (Get-FileHash -Path "installer/StreamForge-Setup-v1.0.0.exe" -Algorithm SHA256).Hash
+          $zipHash = (Get-FileHash -Path "installer/StreamForge-v1.0.0-Portable.zip" -Algorithm SHA256).Hash
+          "$setupHash  StreamForge-Setup-v1.0.0.exe`n$zipHash  StreamForge-v1.0.0-Portable.zip" | Out-File -Encoding utf8 "installer/checksums-sha256.txt"
+          Write-Host "Installer SHA-256: $setupHash"
+          Write-Host "Portable SHA-256:  $zipHash"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: StreamForge ${{ github.ref_name }}
+          files: |
+            installer/StreamForge-Setup-v1.0.0.exe
+            installer/StreamForge-v1.0.0-Portable.zip
+            installer/checksums-sha256.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true
