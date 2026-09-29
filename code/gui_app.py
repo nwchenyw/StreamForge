@@ -671,13 +671,28 @@ class MediaDownloaderApp(ctk.CTk):
         self.geometry("1060 x 870")
         self.minsize(920, 720)
 
-        # 預設儲存目錄（支援 EXE 打包環境與腳本環境）
-        if hasattr(sys, '_MEIPASS'):
-            self.default_download_dir = os.path.join(os.path.dirname(sys.executable), "downloads")
+        # 讀取使用者設定檔並在啟用時進行自動更新檢查
+        self.app_config = load_app_config()
+        saved_lang = self.app_config.get("language", "zh_TW")
+        i18n.set_current_language(saved_lang)
+
+        # 預設儲存目錄（優先使用使用者的「下載 (Downloads)」目錄，避免安裝在 Program Files 時引發 Windows WinError 5 權限不足）
+        user_downloads = os.path.join(os.path.expanduser("~"), "Downloads", "StreamForge")
+        configured_dir = self.app_config.get("download_dir", "")
+        if configured_dir and os.path.isdir(configured_dir):
+            self.default_download_dir = configured_dir
         else:
-            self.default_download_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "downloads")
-        self.default_download_dir = os.path.abspath(self.default_download_dir)
-        os.makedirs(self.default_download_dir, exist_ok=True)
+            self.default_download_dir = user_downloads
+
+        try:
+            os.makedirs(self.default_download_dir, exist_ok=True)
+        except Exception:
+            # 萬一受限，回退至使用者家目錄
+            self.default_download_dir = os.path.join(os.path.expanduser("~"), "StreamForge")
+            try:
+                os.makedirs(self.default_download_dir, exist_ok=True)
+            except Exception:
+                self.default_download_dir = os.path.expanduser("~")
 
         self.songs = []  # 儲存清單項目
         self.song_widgets = []  # 儲存 UI 元件
@@ -692,11 +707,6 @@ class MediaDownloaderApp(ctk.CTk):
         self.console_visible = True
         self.cmd_history = []
         self.cmd_history_idx = -1
-
-        # 讀取使用者設定檔並在啟用時進行自動更新檢查
-        self.app_config = load_app_config()
-        saved_lang = self.app_config.get("language", "zh_TW")
-        i18n.set_current_language(saved_lang)
 
         self._build_ui()
         self._detect_usb_drives()
@@ -1785,6 +1795,8 @@ class MediaDownloaderApp(ctk.CTk):
         if path:
             self.entry_dir.delete(0, tk.END)
             self.entry_dir.insert(0, path)
+            self.app_config["download_dir"] = path
+            save_app_config(self.app_config)
             self.log(f"已更換儲存目錄: {path}")
             self.inspect_folder_format(user_triggered=False)
 
