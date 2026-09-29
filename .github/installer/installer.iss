@@ -49,6 +49,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
 CloseApplications=force
 RestartApplications=no
+ChangesAssociations=yes
 
 [Languages]
 Name: "chinesetraditional"; MessagesFile: ".github\installer\languages\ChineseTraditional.isl"; LicenseFile: ".github\installer\licenses\License_zh_TW.txt"
@@ -166,7 +167,7 @@ german.ConfirmUninstall=Möchten Sie das Deinstallationsprogramm wirklich starte
 german.RepairFinished=StreamForge-Programmdateien wurden erfolgreich repariert und wiederhergestellt!
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "autoupdate"; Description: "{cm:AutoUpdate}"; GroupDescription: "{cm:SettingsGroup}"; Flags: checkedonce
 
 [Files]
@@ -174,9 +175,9 @@ Name: "autoupdate"; Description: "{cm:AutoUpdate}"; GroupDescription: "{cm:Setti
 Source: "dist\StreamForge\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\app_icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\app_icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram}"; Flags: postinstall nowait skipifsilent
