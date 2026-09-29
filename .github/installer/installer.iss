@@ -42,6 +42,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequiredOverridesAllowed=commandline dialog
 
 ; App display in Windows Settings and Control Panel (應用程式與控制台一鍵正常解除安裝)
+SetupIconFile=assets\app_icon.ico
 CreateUninstallRegKey=yes
 Uninstallable=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -184,6 +185,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram}"; Flags: pos
 ; 解除安裝時徹底清理所有運行生成的快取與資料夾，不殘留任何垃圾檔案
 Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\ffmpeg_bin"
+Type: filesandordirs; Name: "{app}\assets"
 Type: filesandordirs; Name: "{app}\downloads"
 Type: files; Name: "{app}\*.*"
 Type: dirifempty; Name: "{app}"

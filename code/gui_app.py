@@ -10,12 +10,41 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
+from PIL import Image
 import downloader
 import i18n
 
 # 設定外觀模式與主題
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
+
+# ================= 靜態資源路徑解析與圖示設定 =================
+def get_asset_path(filename: str) -> str:
+    """取得靜態資源路徑 (支援 PyInstaller 打包目錄、assets 子目錄及原始碼模式)"""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base_dir = sys._MEIPASS
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    candidates = [
+        os.path.join(base_dir, "assets", filename),
+        os.path.join(base_dir, filename),
+        os.path.join(os.path.dirname(base_dir), "assets", filename),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return candidates[0]
+
+
+def apply_window_icon(window):
+    """為指定視窗設定官方 StreamForge 應用程式圖示 (.ico)"""
+    ico_path = get_asset_path("app_icon.ico")
+    if os.path.exists(ico_path):
+        try:
+            window.iconbitmap(ico_path)
+        except Exception:
+            pass
 
 # ================= 設定檔與更新檢查 =================
 APP_VERSION = "1.0.0"
@@ -178,6 +207,7 @@ class UpdateDownloadDialog(ctk.CTkToplevel):
     """自動下載新版安裝檔並執行升級的進度視窗"""
     def __init__(self, parent, new_version: str, download_url: str):
         super().__init__(parent)
+        apply_window_icon(self)
         self.title("🚀 StreamForge - 正在自動下載更新")
         self.geometry("460x200")
         self.resizable(False, False)
@@ -310,6 +340,7 @@ class FormatFactoryDialog(ctk.CTkToplevel):
     """
     def __init__(self, parent, default_out_dir: str = "", log_callback: Optional[Callable[[str], None]] = None):
         super().__init__(parent)
+        apply_window_icon(self)
         self.title("🎛️ StreamForge 格式工廠 · 本地媒體轉檔")
         self.geometry("680x580")
         self.minsize(580, 480)
@@ -644,6 +675,7 @@ class DuplicateDialog(ctk.CTkToplevel):
     """發現重複檔案時的選擇互動視窗"""
     def __init__(self, parent, song_title: str, existing_filename: str):
         super().__init__(parent)
+        apply_window_icon(self)
         self.title("⚠️ 發現重複檔案 - 選擇處理方式")
         self.geometry("540x350")
         self.resizable(False, False)
@@ -744,6 +776,7 @@ class FailureReportDialog(ctk.CTkToplevel):
     """下載失敗項目清單與重試對話框"""
     def __init__(self, parent, failed_items: list, retry_callback):
         super().__init__(parent)
+        apply_window_icon(self)
         self.title("❌ 下載失敗項目報告與重試")
         self.geometry("680x480")
         self.minsize(560, 380)
@@ -834,8 +867,9 @@ class AboutDialog(ctk.CTkToplevel):
     """關於 StreamForge、版權宣告、授權條款與自動更新對話框 (支援多國語言)"""
     def __init__(self, parent):
         super().__init__(parent)
+        apply_window_icon(self)
         self.title(i18n.t("about_title"))
-        self.geometry("640x600")
+        self.geometry("640x670")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -844,14 +878,25 @@ class AboutDialog(ctk.CTkToplevel):
         self.cfg = load_app_config()
         self.install_date_str = get_install_date_str()
 
-        # 頂部 Logo 與標題
+        # 頂部 Logo 品牌圖示
+        logo_file = get_asset_path("logo.png")
+        if os.path.exists(logo_file):
+            try:
+                pil_logo = Image.open(logo_file)
+                self.logo_ctk_img = ctk.CTkImage(light_image=pil_logo, dark_image=pil_logo, size=(72, 72))
+                lbl_icon = ctk.CTkLabel(self, text="", image=self.logo_ctk_img)
+                lbl_icon.pack(padx=20, pady=(12, 2))
+            except Exception:
+                pass
+
+        # 頂部標題
         lbl_logo = ctk.CTkLabel(
             self,
             text="⚡ StreamForge",
-            font=ctk.CTkFont(size=24, weight="bold"),
+            font=ctk.CTkFont(size=22, weight="bold"),
             text_color="#38bdf8"
         )
-        lbl_logo.pack(padx=20, pady=(14, 2))
+        lbl_logo.pack(padx=20, pady=(2, 2))
 
         lbl_version = ctk.CTkLabel(
             self,
@@ -1051,6 +1096,7 @@ class MediaDownloaderApp(ctk.CTk):
         self.title("StreamForge v1.0.0 · 串流影音工坊 (多格式下載 / 本地轉檔 · 命令終端版)")
         self.geometry("1060 x 870")
         self.minsize(920, 720)
+        apply_window_icon(self)
 
         # 讀取使用者設定檔並在啟用時進行自動更新檢查
         self.app_config = load_app_config()
