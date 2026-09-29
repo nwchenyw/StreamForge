@@ -131,3 +131,9 @@ iscc .github/installer/installer.iss
 2. 本專案**不提供、不儲存、亦不分發**任何受著作權保護之媒體內容，所有下載數據均由使用者所提供之網路位址即時串流處理。
 3. 使用者在使用本工具時，應自覺遵守所在國家/地區之智慧財產權法規及各影音平台之使用者服務條款。
 4. 任何因不當使用、商業營利或侵犯他人智慧財產權所衍生之法律責任，均由使用者自行承擔，開發團隊不負任何連帶保證或法律責任。
+
+---
+
+## 🔏 數位簽章政策 (Code Signing Policy)
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).  
+詳細安全規範與團隊分工請參閱 [SIGNING_POLICY.md](SIGNING_POLICY.md)。
