@@ -47,6 +47,54 @@ def apply_window_icon(window):
         except Exception:
             pass
 
+
+def get_windows_user_downloads_dir() -> str:
+    """
+    動態精確偵測 Windows 使用者實際的「下載」資料夾路徑。
+    支援使用者將下載資料夾轉移至 D:、E: 槽或其他自訂磁碟機之情境。
+    優先透過 Windows Shell 註冊表查詢 GUID，次之呼叫 Win32 SHGetKnownFolderPath，最後回退至家目錄。
+    """
+    if sys.platform == "win32":
+        try:
+            import winreg
+            sub_key = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+                for guid in ("{374DE290-123F-4565-9164-39C4925E467B}", "{7D83EE9B-2244-4E70-B1F5-5393042AF1E4}", "Downloads"):
+                    try:
+                        raw_path, _ = winreg.QueryValueEx(key, guid)
+                        expanded = os.path.expandvars(raw_path)
+                        if expanded and os.path.isdir(expanded):
+                            return expanded
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+
+        try:
+            import ctypes
+            from ctypes import wintypes
+            class GUID(ctypes.Structure):
+                _fields_ = [
+                    ("Data1", wintypes.DWORD),
+                    ("Data2", wintypes.WORD),
+                    ("Data3", wintypes.WORD),
+                    ("Data4", wintypes.BYTE * 8)
+                ]
+            FOLDERID_Downloads = GUID(0x374DE290, 0x123F, 0x4565, (wintypes.BYTE * 8)(0x91, 0x64, 0x39, 0xC4, 0x92, 0x5E, 0x46, 0x7B))
+            path_ptr = ctypes.c_wchar_p()
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(FOLDERID_Downloads), 0, None, ctypes.byref(path_ptr)) == 0:
+                result = path_ptr.value
+                ctypes.windll.ole32.CoTaskMemFree(path_ptr)
+                if result and os.path.isdir(result):
+                    return result
+        except Exception:
+            pass
+
+    fallback = os.path.join(os.path.expanduser("~"), "Downloads")
+    if os.path.isdir(fallback):
+        return fallback
+    return os.path.expanduser("~")
+
 # ================= 設定檔與更新檢查 =================
 APP_VERSION = "1.0.0"
 GITHUB_REPO = "nwchenyw/StreamForge"
@@ -351,7 +399,7 @@ class FormatFactoryDialog(ctk.CTkToplevel):
         self.parent = parent
         self.log_callback = log_callback
         self.files_to_convert = []
-        self.default_out_dir = default_out_dir or os.path.join(os.path.expanduser("~"), "Downloads", "StreamForge")
+        self.default_out_dir = default_out_dir or os.path.join(get_windows_user_downloads_dir(), "StreamForge")
 
         # 頂部標題
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -1104,8 +1152,9 @@ class MediaDownloaderApp(ctk.CTk):
         saved_lang = self.app_config.get("language", "zh_TW")
         i18n.set_current_language(saved_lang)
 
-        # 預設儲存目錄（優先使用使用者的「下載 (Downloads)」目錄，避免安裝在 Program Files 時引發 Windows WinError 5 權限不足）
-        user_downloads = os.path.join(os.path.expanduser("~"), "Downloads", "StreamForge")
+        # 預設儲存目錄（動態精確偵測 Windows 使用者的真實下載目錄，支援轉移至 D:、E: 槽或自訂路徑之設定）
+        real_downloads = get_windows_user_downloads_dir()
+        user_downloads = os.path.join(real_downloads, "StreamForge")
         configured_dir = self.app_config.get("download_dir", "")
         if configured_dir and os.path.isdir(configured_dir):
             self.default_download_dir = configured_dir
