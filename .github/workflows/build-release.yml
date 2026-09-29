@@ -39,12 +39,8 @@ jobs:
           }
 
       - name: Setup FFmpeg binaries
-        shell: pwsh
         run: |
-          python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
-          New-Item -ItemType Directory -Force -Path "code/ffmpeg_bin"
-          Get-Command ffmpeg | Select-Object -ExpandProperty Source | Copy-Item -Destination "code/ffmpeg_bin/ffmpeg.exe" -Force
-          Get-Command ffprobe | Select-Object -ExpandProperty Source | Copy-Item -Destination "code/ffmpeg_bin/ffprobe.exe" -Force
+          python -c "import shutil, os, static_ffmpeg; ffmpeg, ffprobe = static_ffmpeg.run.get_or_fetch_platform_executables_else_raise(); os.makedirs('code/ffmpeg_bin', exist_ok=True); shutil.copy(ffmpeg, 'code/ffmpeg_bin/ffmpeg.exe'); shutil.copy(ffprobe, 'code/ffmpeg_bin/ffprobe.exe'); print('FFmpeg and FFprobe copied successfully')"
 
       - name: Build Application Directory with PyInstaller
         shell: pwsh
