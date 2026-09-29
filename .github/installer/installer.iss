@@ -205,11 +205,13 @@ var
 
 function DetectExistingInstallation(): Boolean;
 var
-  RegKey: string;
+  RegKey, RegKey2: string;
   UninstStr: string;
+  CandidateDir: string;
 begin
   Result := False;
-  RegKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1';
+  RegKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{9F82A4C1-3E2B-4A68-9B7E-7B93F678E201}_is1';
+  RegKey2 := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\StreamForge_is1';
   InstalledVersion := '';
   ExistingInstallDir := '';
   UninstStr := '';
@@ -234,6 +236,20 @@ begin
     RegQueryStringValue(HKCU, RegKey, 'InstallLocation', ExistingInstallDir);
     RegQueryStringValue(HKCU, RegKey, 'UninstallString', UninstStr);
     Result := True;
+  end
+  else if IsWin64 and RegKeyExists(HKLM64, RegKey2) then
+  begin
+    RegQueryStringValue(HKLM64, RegKey2, 'DisplayVersion', InstalledVersion);
+    RegQueryStringValue(HKLM64, RegKey2, 'InstallLocation', ExistingInstallDir);
+    RegQueryStringValue(HKLM64, RegKey2, 'UninstallString', UninstStr);
+    Result := True;
+  end
+  else if RegKeyExists(HKCU, RegKey2) then
+  begin
+    RegQueryStringValue(HKCU, RegKey2, 'DisplayVersion', InstalledVersion);
+    RegQueryStringValue(HKCU, RegKey2, 'InstallLocation', ExistingInstallDir);
+    RegQueryStringValue(HKCU, RegKey2, 'UninstallString', UninstStr);
+    Result := True;
   end;
 
   if Result then
@@ -246,14 +262,85 @@ begin
       if FileExists(AddBackslash(ExistingInstallDir) + 'unins000.exe') then
         ExistingUninstallExe := AddBackslash(ExistingInstallDir) + 'unins000.exe';
     end;
+  end
+  else
+  begin
+    // 檔案層級後備檢查
+    CandidateDir := ExpandConstant('{autopf}\{#MyAppName}');
+    if FileExists(AddBackslash(CandidateDir) + '{#MyAppExeName}') then
+    begin
+      ExistingInstallDir := CandidateDir;
+      if FileExists(AddBackslash(CandidateDir) + 'unins000.exe') then
+        ExistingUninstallExe := AddBackslash(CandidateDir) + 'unins000.exe';
+      InstalledVersion := '{#MyAppVersion}';
+      Result := True;
+    end;
   end;
 end;
 
 procedure InitializeWizard();
+var
+  PromptMsg: string;
 begin
   IsRepairMode := False;
   IsReinstallMode := False;
-  IsAlreadyInstalled := DetectExistingInstallation() and (InstalledVersion = '{#MyAppVersion}');
+  IsAlreadyInstalled := DetectExistingInstallation();
+
+  if IsAlreadyInstalled then
+  begin
+    if InstalledVersion = '' then
+      InstalledVersion := '{#MyAppVersion}';
+
+    PromptMsg :=
+      '偵測到您的電腦中已安裝 StreamForge (版本: ' + InstalledVersion + ')！'#13#10#13#10 +
+      '安裝路徑：' + ExistingInstallDir + #13#10#13#10 +
+      '請問您是否要重新安裝 StreamForge？'#13#10#13#10 +
+      '• 點選【是 (Yes)】：進入安裝精靈進行重新安裝或維護'#13#10 +
+      '• 點選【否 (No)】：取消並退出安裝精靈';
+
+    case ActiveLanguage of
+      'english':
+        PromptMsg :=
+          'StreamForge (v' + InstalledVersion + ') is already installed on your system!'#13#10#13#10 +
+          'Install Location: ' + ExistingInstallDir + #13#10#13#10 +
+          'Would you like to reinstall StreamForge?'#13#10#13#10 +
+          '• Click [Yes]: Proceed with reinstallation or maintenance'#13#10 +
+          '• Click [No]: Cancel and exit setup';
+      'chinesesimplified':
+        PromptMsg :=
+          '检测到您的计算机中已安装 StreamForge (版本: ' + InstalledVersion + ')！'#13#10#13#10 +
+          '安装路径：' + ExistingInstallDir + #13#10#13#10 +
+          '您是否要重新安装 StreamForge？'#13#10#13#10 +
+          '• 点击【是 (Yes)】：进入安装向导进行重新安装或维护'#13#10 +
+          '• 点击【否 (No)】：取消并退出安装向导';
+      'japanese':
+        PromptMsg :=
+          'コンピューターに StreamForge (v' + InstalledVersion + ') が既にインストールされています！'#13#10#13#10 +
+          'インストール先：' + ExistingInstallDir + #13#10#13#10 +
+          'StreamForge を再インストールしますか？'#13#10#13#10 +
+          '• [はい (Yes)]：再インストールまたはメンテナンスを続行'#13#10 +
+          '• [いいえ (No)]：インストールをキャンセルして終了';
+      'korean':
+        PromptMsg :=
+          '컴퓨터에 StreamForge (v' + InstalledVersion + ')가 이미 설치되어 있습니다!'#13#10#13#10 +
+          '설치 경로: ' + ExistingInstallDir + #13#10#13#10 +
+          'StreamForge를 재설치하시겠습니까?'#13#10#13#10 +
+          '• [예 (Yes)]: 재설치 또는 유지 관리 진행'#13#10 +
+          '• [아니오 (No)]: 설치를 취소하고 종료';
+    end;
+
+    if not WizardSilent then
+    begin
+      if MsgBox(PromptMsg, mbConfirmation, MB_YESNO) = IDNO then
+      begin
+        ExitProcess(0);
+      end;
+    end;
+
+    // 自動預填既有安裝目錄
+    if ExistingInstallDir <> '' then
+      WizardForm.DirEdit.Text := ExistingInstallDir;
+  end;
 
   MaintenancePage := CreateInputOptionPage(
     wpWelcome,
