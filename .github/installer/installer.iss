@@ -29,9 +29,6 @@ DisableDirPage=no
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=no
 
-; MIT License Page
-LicenseFile=LICENSE
-
 ; Output configuration (outputs directly into installer/ directory under project root)
 OutputDir=installer
 OutputBaseFilename=StreamForge-Setup-v{#MyAppVersion}
@@ -53,14 +50,14 @@ CloseApplications=force
 RestartApplications=no
 
 [Languages]
-Name: "chinesetraditional"; MessagesFile: ".github\installer\languages\ChineseTraditional.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: ".github\installer\languages\ChineseSimplified.isl"
-Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
-Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"
+Name: "chinesetraditional"; MessagesFile: ".github\installer\languages\ChineseTraditional.isl"; LicenseFile: ".github\installer\licenses\License_zh_TW.txt"
+Name: "english"; MessagesFile: "compiler:Default.isl"; LicenseFile: ".github\installer\licenses\License_en.txt"
+Name: "chinesesimplified"; MessagesFile: ".github\installer\languages\ChineseSimplified.isl"; LicenseFile: ".github\installer\licenses\License_zh_CN.txt"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"; LicenseFile: ".github\installer\licenses\License_ja.txt"
+Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"; LicenseFile: ".github\installer\licenses\License_en.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; LicenseFile: ".github\installer\licenses\License_en.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"; LicenseFile: ".github\installer\licenses\License_en.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"; LicenseFile: ".github\installer\licenses\License_en.txt"
 
 [CustomMessages]
 chinesetraditional.CreateDesktopIcon=建立桌面捷徑 (&Create desktop shortcut)
