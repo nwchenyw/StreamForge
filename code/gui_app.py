@@ -1816,14 +1816,14 @@ class MediaDownloaderApp(ctk.CTk):
     # ================= 命令模式日誌功能 (帶佇列限頻，杜絕介面卡頓) =================
 
     def log(self, msg: str):
-        """線程安全的即時日誌紀錄 (以 100ms 批次刷新，防止大量網絡數據包卡死 UI)"""
+        """線程安全的即時日誌紀錄 (以 200ms 批次刷新，防止大量網絡數據包卡死 UI)"""
         now_str = datetime.now().strftime("%H:%M:%S")
         line = f"[{now_str}] {msg}\n"
         with self._log_lock:
             self._log_queue.append(line)
             if not self._log_flushing:
                 self._log_flushing = True
-                self.after(100, self._flush_log_queue)
+                self.after(200, self._flush_log_queue)
 
     def _flush_log_queue(self):
         with self._log_lock:
@@ -1835,16 +1835,18 @@ class MediaDownloaderApp(ctk.CTk):
             self._log_flushing = False
 
         if hasattr(self, 'txt_cmd') and self.txt_cmd.winfo_exists():
-            self.txt_cmd.insert("end", batch)
-            # 限制終端最多保留 2000 行，避免記憶體暴增與介面延遲
-            try:
-                line_count = int(self.txt_cmd.index("end-1c").split('.')[0])
-                if line_count > 2000:
-                    self.txt_cmd.delete("1.0", f"{line_count - 1500}.0")
-            except Exception:
-                pass
-            if self.chk_autoscroll.get():
-                self.txt_cmd.see("end")
+            if getattr(self, 'console_visible', True):
+                self.txt_cmd.insert("end", batch)
+                try:
+                    line_count = int(self.txt_cmd.index("end-1c").split('.')[0])
+                    if line_count > 1500:
+                        self.txt_cmd.delete("1.0", f"{line_count - 1000}.0")
+                except Exception:
+                    pass
+                if getattr(self, 'chk_autoscroll', None) and self.chk_autoscroll.get():
+                    self.txt_cmd.see("end")
+            else:
+                self.txt_cmd.insert("end", batch)
 
     def clear_log(self):
         with self._log_lock:
@@ -2319,7 +2321,7 @@ class MediaDownloaderApp(ctk.CTk):
                 f"  保持現有檔案名稱不變，且新下載的歌曲「不加上任何數字編號」。"
             )
 
-            ans = messagebox.askyesno("格式檢查與重新命名", msg)
+            ans = messagebox.askyesno("格式檢查與重新命名", msg, parent=self)
             if ans:
                 try:
                     self.next_number = downloader.rename_folder_files_to_numbered(folder_path, start_number=1)
@@ -2445,11 +2447,11 @@ class MediaDownloaderApp(ctk.CTk):
 
     def clear_song_list(self):
         if self.is_running:
-            messagebox.showwarning("提示", "正在執行下載任務，無法清空清單！")
+            messagebox.showwarning("提示", "正在執行下載任務，無法清空清單！", parent=self)
             return
         if not self.songs:
             return
-        if messagebox.askyesno("確認清空", "確定要清空目前清單中的所有歌曲嗎？"):
+        if messagebox.askyesno("確認清空", "確定要清空目前清單中的所有歌曲嗎？", parent=self):
             for w in self.song_widgets:
                 w.destroy()
             self.song_widgets.clear()
@@ -2461,7 +2463,7 @@ class MediaDownloaderApp(ctk.CTk):
 
     def remove_single_song(self, song_item, row_frame):
         if self.is_running:
-            messagebox.showwarning("提示", "正在執行下載任務，無法移除歌曲！")
+            messagebox.showwarning("提示", "正在執行下載任務，無法移除歌曲！", parent=self)
             return
         if song_item in self.songs:
             self.songs.remove(song_item)
@@ -2475,7 +2477,7 @@ class MediaDownloaderApp(ctk.CTk):
         """顯示單一歌曲失敗原因詳細視窗"""
         err_msg = song.get('error', '未知錯誤')
         msg = f"【下載失敗詳情】\n\n歌曲標題：{song['title']}\n網址：{song['url']}\n\n錯誤原因：\n{err_msg}\n\n是否立即單獨重新下載此首？"
-        if messagebox.askyesno("失敗詳情與重試", msg):
+        if messagebox.askyesno("失敗詳情與重試", msg, parent=self):
             for s in self.songs:
                 s['var'].set(s == song)
             self.update_stats()
@@ -2579,16 +2581,41 @@ class MediaDownloaderApp(ctk.CTk):
         if not items:
             self.lbl_status.configure(text="解析失敗，請確認網址正確性。")
             self.log(f"❌ 解析失敗：無法讀取該網址 {url}")
-            messagebox.showerror("錯誤", f"無法從網址解析出曲目：\n{url}")
+            messagebox.showerror("錯誤", f"無法從網址解析出曲目：\n{url}", parent=self)
             return
+
+        # 若網址解析出多首歌曲（播放清單 / 合輯），先跳出視窗確認是否匯入整個清單
+        if len(items) > 1:
+            first_title = items[0].get('title', '第一首歌曲')
+            total_items = len(items)
+            msg = (
+                f"偵測到此網址包含播放清單（共 {total_items} 首歌曲）。\n\n"
+                f"請問您是否要匯入整個播放清單？\n\n"
+                f"--------------------------------------------------\n"
+                f"• 點選【是 (Yes)】：\n"
+                f"  匯入整個播放清單（全部 {total_items} 首歌曲）\n\n"
+                f"• 點選【否 (No)】：\n"
+                f"  僅匯入第 1 首歌曲至駐列清單\n"
+                f"  （{first_title}）"
+            )
+            import_all = messagebox.askyesno("匯入播放清單確認", msg, parent=self)
+            if not import_all:
+                items = [items[0]]
+                self.log(f"ℹ️ 使用者選擇僅匯入播放清單第 1 首歌曲: {first_title}")
+            else:
+                self.log(f"ℹ️ 使用者確認匯入整個播放清單（共 {total_items} 首歌曲）")
 
         existing_ids = {s['id'] for s in self.songs}
         added_count = 0
+        many_items = len(items) > 10
+
+        if many_items:
+            self.log(f"➕ 正在加入 {len(items)} 首歌曲至清單...")
 
         for item in items:
             if item.get('status') == '解析失敗':
                 self.log(f"❌ 解析曲目失敗: {item.get('error', '未知錯誤')}")
-                messagebox.showerror("解析失敗", f"無法讀取該網址：\n{item.get('error', '未知錯誤')}")
+                messagebox.showerror("解析失敗", f"無法讀取該網址：\n{item.get('error', '未知錯誤')}", parent=self)
                 continue
 
             if item['id'] not in existing_ids:
@@ -2596,7 +2623,11 @@ class MediaDownloaderApp(ctk.CTk):
                 self.render_song_row(item)
                 existing_ids.add(item['id'])
                 added_count += 1
-                self.log(f"➕ 已加入曲目: {item['title']} (頻道: {item['uploader']}, 長度: {item['duration_str']})")
+                if not many_items:
+                    self.log(f"➕ 已加入曲目: {item['title']} (頻道: {item['uploader']}, 長度: {item['duration_str']})")
+
+        if many_items and added_count > 0:
+            self.log(f"✅ 已成功加入 {added_count} 首歌曲！")
 
         self.update_stats()
 
@@ -2645,22 +2676,44 @@ class MediaDownloaderApp(ctk.CTk):
             self.btn_pause.configure(text=i18n.t("btn_pause"), fg_color="#f59e0b", hover_color="#d97706")
             self.lbl_status.configure(text="▶️ 恢復下載中...")
             self.log("▶️ 使用者恢復了下載任務")
+            for s in self.songs:
+                if s.get('status') == 'paused':
+                    s['status'] = 'downloading'
+                    self._update_song_status(s, "⚡ 下載中...", "#f59e0b")
         else:
             self.is_paused = True
             self.pause_event.clear()
             self.btn_pause.configure(text=i18n.t("btn_resume"), fg_color="#0284c7", hover_color="#0369a1")
             self.lbl_status.configure(text="⏸️ 下載已暫停，點擊「繼續下載」以恢復")
             self.log("⏸️ 使用者暫停了下載任務")
+            for s in self.songs:
+                if s.get('status') == 'downloading':
+                    s['status'] = 'paused'
+                    self._update_song_status(s, "⏸️ 已暫停", "#94a3b8")
 
     def cancel_download(self):
-        """停止/取消當前下載任務"""
+        """停止/取消當前下載任務（毫秒級即時響應，絕不卡死）"""
         if not self.is_running:
             return
-        if messagebox.askyesno("確認停止", "您確定要停止當前的下載任務嗎？\n已下載完成的檔案將會保留。"):
-            self.cancel_requested = True
-            self.pause_event.set()
-            self.lbl_status.configure(text="⏹️ 正在停止下載任務...")
-            self.log("⏹️ 使用者要求停止下載任務")
+        self.cancel_requested = True
+        self.is_paused = False
+        self.pause_event.set()
+
+        self.btn_pause.configure(state="disabled", fg_color="#334155")
+        self.btn_cancel.configure(state="disabled", fg_color="#334155", text="⏹️ 停止中...")
+        self.lbl_status.configure(text="⏹️ 正在停止下載任務...")
+        self.log("⏹️ 使用者已要求立即停止下載任務")
+
+        for s in self.songs:
+            if s.get('status') in ('downloading', 'paused', '等待中'):
+                s['status'] = 'stopped'
+                self._update_song_status(s, "⏹️ 已停止", "#64748b")
+
+        if hasattr(self, '_current_executor') and self._current_executor:
+            try:
+                self._current_executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
 
     def retry_failed_items(self):
         """重試所有失敗的項目"""
@@ -2830,15 +2883,25 @@ class MediaDownloaderApp(ctk.CTk):
 
             # 4. 開始執行下載
             display_name = f"{custom_stem}{target_ext}" if custom_stem else f"{prefix_str}{song['title']}"
+            song['status'] = 'downloading'
             self.after(0, lambda s=song: self._update_song_status(s, "⚡ 下載中...", "#f59e0b"))
             self.log(f"📥 [{song_idx}/{total}] 啟動下載: {display_name}")
 
+            last_song_hook = [0.0]
             def _song_hook(d):
-                if d.get('status') == 'downloading':
+                if self.is_paused or self.cancel_requested:
+                    return
+                now = time.time()
+                if now - last_song_hook[0] < 0.3:
+                    return
+                last_song_hook[0] = now
+                status = d.get('status')
+                if status == 'downloading':
                     pct = d.get('_percent_str', '').strip()
-                    if pct:
+                    if pct and song.get('status') == 'downloading':
                         self.after(0, lambda s=song, p=pct: self._update_song_status(s, f"⚡ 下載中 ({p})", "#f59e0b"))
-                elif d.get('status') == 'finished':
+                elif status == 'finished':
+                    song['status'] = 'converting'
                     self.after(0, lambda s=song: self._update_song_status(s, "🔄 轉檔中...", "#38bdf8"))
 
             try:
@@ -2859,6 +2922,7 @@ class MediaDownloaderApp(ctk.CTk):
                 )
                 song['file_path'] = media_path
                 song['error'] = None
+                song['status'] = 'completed'
                 with prog_lock:
                     success_count += 1
                     completed_count += 1
@@ -2868,18 +2932,29 @@ class MediaDownloaderApp(ctk.CTk):
                 self.log(f"✅ 成功完成 [{song_idx}/{total}]: {os.path.basename(media_path)}")
                 self.after(0, lambda s=song: self._update_song_status(s, "✅ 已完成", "#10b981"))
 
+            except downloader.DownloadCancelled:
+                with prog_lock:
+                    completed_count += 1
+                    pct = completed_count / total
+                    self.after(0, lambda p=pct: self.prog_bar.set(p))
+                song['status'] = 'stopped'
+                self.after(0, lambda s=song: self._update_song_status(s, "⏹️ 已停止", "#64748b"))
+                return
+
             except Exception as ex:
                 with prog_lock:
                     completed_count += 1
                     pct = completed_count / total
                     self.after(0, lambda p=pct: self.prog_bar.set(p))
                 if self.cancel_requested:
+                    song['status'] = 'stopped'
                     self.after(0, lambda s=song: self._update_song_status(s, "⏹️ 已停止", "#64748b"))
                     return
                 with prog_lock:
                     fail_count += 1
                 full_err = str(ex)
                 song['error'] = full_err
+                song['status'] = 'failed'
                 self.failed_items.append({'song': song, 'title': song['title'], 'url': song['url'], 'error': full_err})
                 self.log(f"❌ 下載失敗 [{song_idx}/{total}]: {song['title']} | 原因: {full_err}")
                 self.after(0, lambda s=song: self._update_song_status(s, "❌ 失敗 (點擊看原因)", "#ef4444", error_clickable=True))
@@ -2888,13 +2963,21 @@ class MediaDownloaderApp(ctk.CTk):
         workers = max(1, min(max_workers, len(songs)))
         self.log(f"🚀 多線程併發引擎已啟用：同時執行線程 = {workers}，FFmpeg 全核心加速已就緒")
 
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        executor = ThreadPoolExecutor(max_workers=workers)
+        self._current_executor = executor
+        try:
             futures = [executor.submit(download_single_song, i, song) for i, song in enumerate(songs, 1)]
             for future in futures:
                 try:
                     future.result()
                 except Exception:
                     pass
+        finally:
+            try:
+                executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+            self._current_executor = None
 
         if start_num is not None:
             self.next_number = start_num + len(songs)
@@ -2953,7 +3036,7 @@ class MediaDownloaderApp(ctk.CTk):
                 f"檔案已存於: {output_dir}\n"
                 f"是否立即開啟下載資料夾？"
             )
-            if messagebox.askyesno("下載完成", msg):
+            if messagebox.askyesno("下載完成", msg, parent=self):
                 self.open_download_folder()
 
 

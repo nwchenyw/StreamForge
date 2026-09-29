@@ -30,6 +30,7 @@ except Exception:
     pass
 
 import yt_dlp
+from yt_dlp.utils import DownloadCancelled
 
 AUDIO_FORMATS = ('mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus')
 VIDEO_FORMATS = ('mp4', 'mkv', 'webm', 'mov', 'avi')
@@ -365,31 +366,54 @@ def extract_all_metadata(urls: List[str], callback: Optional[Callable[[int, int,
     return all_items
 
 class YTDLCommandLogger:
-    def __init__(self, log_callback: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self,
+        log_callback: Optional[Callable[[str], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
+        pause_check: Optional[Callable[[], bool]] = None
+    ):
         self.log_callback = log_callback
+        self.cancel_check = cancel_check
+        self.pause_check = pause_check
+
+    def _check_state(self):
+        if self.cancel_check and self.cancel_check():
+            raise DownloadCancelled("下載已被使用者取消")
+        if self.pause_check:
+            while self.pause_check():
+                if self.cancel_check and self.cancel_check():
+                    raise DownloadCancelled("下載已被使用者取消")
+                time.sleep(0.1)
 
     def debug(self, msg: str):
+        self._check_state()
         if not self.log_callback:
             return
         m = msg.strip()
-        # 過濾極度冗長的內部 debug，保留重要轉檔、下載、合併訊息
-        if m and not m.startswith('[debug] Encodings') and not m.startswith('[debug] [') and (
-            '[download]' in m or '[ExtractAudio]' in m or '[Merger]' in m or 
+        # 嚴格過濾 raw [download] 數據包，杜絕每秒數百行日誌造成 UI 卡頓！
+        # 下載進度已由 _internal_hook 進行 300ms 限頻回報
+        if m.startswith('[download]') or m.startswith('[debug]'):
+            return
+        if m and (
+            '[ExtractAudio]' in m or '[Merger]' in m or 
             '[Metadata]' in m or '[ThumbnailsConvertor]' in m or 'Destination:' in m
         ):
             self.log_callback(m)
 
     def info(self, msg: str):
+        self._check_state()
         if self.log_callback:
             m = msg.strip()
-            if m:
+            if m and not m.startswith('[download]'):
                 self.log_callback(m)
 
     def warning(self, msg: str):
+        self._check_state()
         if self.log_callback:
             self.log_callback(f"[yt-dlp 警告] {msg.strip()}")
 
     def error(self, msg: str):
+        self._check_state()
         if self.log_callback:
             self.log_callback(f"[yt-dlp 錯誤] {msg.strip()}")
 
@@ -559,24 +583,21 @@ def download_media(
             'remote_components': ['ejs:github'],
         }
 
-    if log_callback:
-        ydl_opts['logger'] = YTDLCommandLogger(log_callback)
-        ydl_opts['quiet'] = False
-    else:
-        ydl_opts['quiet'] = True
+    ydl_opts['logger'] = YTDLCommandLogger(log_callback, cancel_check, pause_check)
+    ydl_opts['quiet'] = False
 
-    # 內部進度、暫停與取消攔截勾點 (帶 250ms 限頻避免介面阻塞)
+    # 內部進度、暫停與取消攔截勾點 (帶 300ms 限頻避免介面阻塞)
     last_hook_time = [0.0]
 
     def _internal_hook(d):
         if cancel_check and cancel_check():
-            raise Exception("下載已被使用者取消")
+            raise DownloadCancelled("下載已被使用者取消")
 
         if pause_check:
             while pause_check():
                 if cancel_check and cancel_check():
-                    raise Exception("下載已被使用者取消")
-                time.sleep(0.2)
+                    raise DownloadCancelled("下載已被使用者取消")
+                time.sleep(0.1)
 
         now = time.time()
         status = d.get('status')
@@ -587,7 +608,7 @@ def download_media(
                 log_callback("[轉檔中] 串流下載完成，正在由 FFmpeg 全核心轉檔與注入標籤...")
             return
 
-        if now - last_hook_time[0] < 0.25:
+        if now - last_hook_time[0] < 0.3:
             return
         last_hook_time[0] = now
 
@@ -600,11 +621,21 @@ def download_media(
             if pct:
                 log_callback(f"[下載進度] {pct} | 速度: {speed} | 剩餘: {eta}")
 
+    def _pp_hook(d):
+        if cancel_check and cancel_check():
+            raise DownloadCancelled("下載已被使用者取消")
+        if pause_check:
+            while pause_check():
+                if cancel_check and cancel_check():
+                    raise DownloadCancelled("下載已被使用者取消")
+                time.sleep(0.1)
+
     ydl_opts['progress_hooks'] = [_internal_hook]
+    ydl_opts['postprocessor_hooks'] = [_pp_hook]
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         if cancel_check and cancel_check():
-            raise Exception("下載已被使用者取消")
+            raise DownloadCancelled("下載已被使用者取消")
             
         info = ydl.extract_info(url, download=True)
         title = info.get('title', 'media')
