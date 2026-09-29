@@ -1184,7 +1184,15 @@ class MediaDownloaderApp(ctk.CTk):
         self.console_visible = True
         self.cmd_history = []
         self.cmd_history_idx = -1
+        self._log_queue = []
+        self._log_lock = threading.Lock()
+        self._log_flushing = False
+        self.duplicate_lock = threading.Lock()
         self.btn_download = None
+        self.btn_pause = None
+        self.btn_cancel = None
+        self.lbl_threads = None
+        self.opt_threads = None
         self.lbl_quality = None
         self.opt_quality = None
         self.chk_thumb = None
@@ -1389,6 +1397,23 @@ class MediaDownloaderApp(ctk.CTk):
             text_color="#38bdf8"
         )
         self.lbl_num_info.pack(side="left", padx=10)
+
+        # 多線程併發下拉選單
+        self.opt_threads = ctk.CTkOptionMenu(
+            num_box,
+            values=["3 線程 (推薦)", "1 線程 (單工)", "2 線程", "4 線程 (高速)", "5 線程 (極速)"],
+            width=125,
+            height=28
+        )
+        self.opt_threads.set("3 線程 (推薦)")
+        self.opt_threads.pack(side="right", padx=(2, 0))
+
+        self.lbl_threads = ctk.CTkLabel(
+            num_box,
+            text=i18n.t("lbl_threads"),
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        self.lbl_threads.pack(side="right", padx=(8, 2))
 
         # 第 3 列：類型切換 (音訊 / 視訊)、格式選單、品質設定與格式工廠轉檔工具
         opts_box = ctk.CTkFrame(settings_frame, fg_color="transparent")
@@ -1654,12 +1679,14 @@ class MediaDownloaderApp(ctk.CTk):
         self.prog_bar.set(0)
         self.prog_bar.grid(row=1, column=0, padx=15, pady=3, sticky="ew")
 
-        # 按鈕容器（包含主下載按鈕與暫停/取消控制）
+        # 按鈕容器（包含主下載按鈕與暫停/停止控制，三合一常駐顯示）
         self.action_box = ctk.CTkFrame(bottom_frame, fg_color="transparent")
         self.action_box.grid(row=2, column=0, padx=15, pady=(4, 8), sticky="ew")
-        self.action_box.grid_columnconfigure(0, weight=1)
+        self.action_box.grid_columnconfigure(0, weight=6)
+        self.action_box.grid_columnconfigure(1, weight=2)
+        self.action_box.grid_columnconfigure(2, weight=2)
 
-        # 靜態下載按鈕
+        # 1. 開始下載按鈕
         self.btn_download = ctk.CTkButton(
             self.action_box,
             text=i18n.t("btn_start_download_mp3"),
@@ -1669,33 +1696,33 @@ class MediaDownloaderApp(ctk.CTk):
             hover_color="#059669",
             command=self.start_download_batch
         )
-        self.btn_download.grid(row=0, column=0, sticky="ew")
+        self.btn_download.grid(row=0, column=0, padx=(0, 6), sticky="ew")
 
-        # 執行中控制列 (暫停 / 取消)
-        self.run_controls_frame = ctk.CTkFrame(self.action_box, fg_color="transparent")
-        self.run_controls_frame.grid_columnconfigure((0, 1), weight=1)
-
+        # 2. 暫停 / 繼續按鈕 (永久可見，未執行時 disabled)
         self.btn_pause = ctk.CTkButton(
-            self.run_controls_frame,
+            self.action_box,
             text=i18n.t("btn_pause"),
             font=ctk.CTkFont(size=14, weight="bold"),
             height=42,
-            fg_color="#f59e0b",
+            fg_color="#334155",
             hover_color="#d97706",
+            state="disabled",
             command=self.toggle_pause
         )
-        self.btn_pause.grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        self.btn_pause.grid(row=0, column=1, padx=3, sticky="ew")
 
+        # 3. 停止下載按鈕 (永久可見，未執行時 disabled)
         self.btn_cancel = ctk.CTkButton(
-            self.run_controls_frame,
+            self.action_box,
             text=i18n.t("btn_cancel"),
             font=ctk.CTkFont(size=14, weight="bold"),
             height=42,
-            fg_color="#ef4444",
+            fg_color="#334155",
             hover_color="#dc2626",
+            state="disabled",
             command=self.cancel_download
         )
-        self.btn_cancel.grid(row=0, column=1, padx=(6, 0), sticky="ew")
+        self.btn_cancel.grid(row=0, column=2, padx=(6, 0), sticky="ew")
 
         # 底部版權宣告列
         lbl_footer = ctk.CTkLabel(
@@ -1781,25 +1808,47 @@ class MediaDownloaderApp(ctk.CTk):
         # 區塊 5: 底部控制
         if not self.is_running:
             self.lbl_status.configure(text=i18n.t("status_ready"))
+        if hasattr(self, 'lbl_threads') and self.lbl_threads:
+            self.lbl_threads.configure(text=i18n.t("lbl_threads"))
         self.btn_pause.configure(text=i18n.t("btn_pause") if not self.is_paused else i18n.t("btn_resume"))
         self.btn_cancel.configure(text=i18n.t("btn_cancel"))
 
-    # ================= 命令模式日誌功能 =================
+    # ================= 命令模式日誌功能 (帶佇列限頻，杜絕介面卡頓) =================
 
     def log(self, msg: str):
-        """線程安全的即時日誌紀錄"""
+        """線程安全的即時日誌紀錄 (以 100ms 批次刷新，防止大量網絡數據包卡死 UI)"""
         now_str = datetime.now().strftime("%H:%M:%S")
         line = f"[{now_str}] {msg}\n"
+        with self._log_lock:
+            self._log_queue.append(line)
+            if not self._log_flushing:
+                self._log_flushing = True
+                self.after(100, self._flush_log_queue)
 
-        def _append():
-            if hasattr(self, 'txt_cmd') and self.txt_cmd.winfo_exists():
-                self.txt_cmd.insert("end", line)
-                if self.chk_autoscroll.get():
-                    self.txt_cmd.see("end")
+    def _flush_log_queue(self):
+        with self._log_lock:
+            if not self._log_queue:
+                self._log_flushing = False
+                return
+            batch = "".join(self._log_queue)
+            self._log_queue.clear()
+            self._log_flushing = False
 
-        self.after(0, _append)
+        if hasattr(self, 'txt_cmd') and self.txt_cmd.winfo_exists():
+            self.txt_cmd.insert("end", batch)
+            # 限制終端最多保留 2000 行，避免記憶體暴增與介面延遲
+            try:
+                line_count = int(self.txt_cmd.index("end-1c").split('.')[0])
+                if line_count > 2000:
+                    self.txt_cmd.delete("1.0", f"{line_count - 1500}.0")
+            except Exception:
+                pass
+            if self.chk_autoscroll.get():
+                self.txt_cmd.see("end")
 
     def clear_log(self):
+        with self._log_lock:
+            self._log_queue.clear()
         self.txt_cmd.delete("1.0", "end")
 
     def copy_log_to_clipboard(self):
@@ -2577,6 +2626,15 @@ class MediaDownloaderApp(ctk.CTk):
         ev.wait()
         return result['action'], result['apply_all']
 
+    def get_selected_thread_count(self) -> int:
+        """獲取使用者所選的多線程併發數量"""
+        if hasattr(self, 'opt_threads') and self.opt_threads:
+            val = self.opt_threads.get()
+            digits = re.findall(r'\d+', val)
+            if digits:
+                return max(1, min(8, int(digits[0])))
+        return 3
+
     def toggle_pause(self):
         """暫停或恢復下載"""
         if not self.is_running:
@@ -2584,25 +2642,25 @@ class MediaDownloaderApp(ctk.CTk):
         if self.is_paused:
             self.is_paused = False
             self.pause_event.set()
-            self.btn_pause.configure(text="⏸️ 暫停下載", fg_color="#f59e0b", hover_color="#d97706")
+            self.btn_pause.configure(text=i18n.t("btn_pause"), fg_color="#f59e0b", hover_color="#d97706")
             self.lbl_status.configure(text="▶️ 恢復下載中...")
             self.log("▶️ 使用者恢復了下載任務")
         else:
             self.is_paused = True
             self.pause_event.clear()
-            self.btn_pause.configure(text="▶️ 繼續下載", fg_color="#0284c7", hover_color="#0369a1")
+            self.btn_pause.configure(text=i18n.t("btn_resume"), fg_color="#0284c7", hover_color="#0369a1")
             self.lbl_status.configure(text="⏸️ 下載已暫停，點擊「繼續下載」以恢復")
             self.log("⏸️ 使用者暫停了下載任務")
 
     def cancel_download(self):
-        """取消下載任務"""
+        """停止/取消當前下載任務"""
         if not self.is_running:
             return
-        if messagebox.askyesno("確認取消", "您確定要取消當前的下載任務嗎？\n已經下載完成的檔案將會保留。"):
+        if messagebox.askyesno("確認停止", "您確定要停止當前的下載任務嗎？\n已下載完成的檔案將會保留。"):
             self.cancel_requested = True
             self.pause_event.set()
-            self.lbl_status.configure(text="⏹️ 正在取消下載任務...")
-            self.log("⏹️ 使用者確認取消下載任務")
+            self.lbl_status.configure(text="⏹️ 正在停止下載任務...")
+            self.log("⏹️ 使用者要求停止下載任務")
 
     def retry_failed_items(self):
         """重試所有失敗的項目"""
@@ -2682,84 +2740,106 @@ class MediaDownloaderApp(ctk.CTk):
         self.duplicate_action_all = None
         self.failed_items = []
 
-        # 切換按鈕為執行中狀態（暫停/取消）
-        self.btn_download.grid_remove()
-        self.run_controls_frame.grid(row=0, column=0, sticky="ew")
-        self.btn_pause.configure(text="⏸️ 暫停下載", fg_color="#f59e0b")
+        # 切換三顆常駐按鈕狀態（主按鈕鎖定，暫停與停止亮起）
+        self.btn_download.configure(state="disabled", fg_color="#1e293b", text="⚡ 下載任務進行中...")
+        self.btn_pause.configure(state="normal", fg_color="#f59e0b", text=i18n.t("btn_pause"))
+        self.btn_cancel.configure(state="normal", fg_color="#ef4444", text=i18n.t("btn_cancel"))
         self.btn_add.configure(state="disabled")
 
-        self.log(f"🎬 開始批次下載任務：共 {len(selected_songs)} 首，格式: {format_type.upper()}，音質/畫質: {quality}")
+        max_workers = self.get_selected_thread_count()
+        self.log(f"🎬 開始批次下載任務：共 {len(selected_songs)} 首，格式: {format_type.upper()}，音質/畫質: {quality}，併發線程: {max_workers}")
 
         threading.Thread(
             target=self._worker_download,
-            args=(selected_songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num),
+            args=(selected_songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers),
             daemon=True
         ).start()
 
-    def _worker_download(self, songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num):
+    def _worker_download(self, songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers=3):
         total = len(songs)
         success_count = 0
         fail_count = 0
         skip_count = 0
-        curr_num = start_num
+        completed_count = 0
+        prog_lock = threading.Lock()
 
-        for i, song in enumerate(songs, 1):
-            # 1. 檢查使用者是否已取消
+        # 預先為每首歌曲分配前綴編號（若啟用 001 編號功能），保證多線程併發時檔名序號依然嚴格按照清單順序排列
+        for idx, s in enumerate(songs):
+            if start_num is not None:
+                s['_assigned_num'] = start_num + idx
+                s['_prefix_str'] = f"{s['_assigned_num']:03d} - "
+            else:
+                s['_assigned_num'] = None
+                s['_prefix_str'] = ""
+
+        def download_single_song(song_idx, song):
+            nonlocal success_count, fail_count, skip_count, completed_count
+
+            # 1. 檢查是否已取消
             if self.cancel_requested:
-                self.log("⏹️ 任務終止：使用者已取消下載。")
-                break
+                return
 
             # 2. 檢查是否暫停中
             while not self.pause_event.is_set():
                 if self.cancel_requested:
-                    break
+                    return
                 time.sleep(0.2)
-            if self.cancel_requested:
-                self.log("⏹️ 任務終止：使用者已取消下載。")
-                break
 
-            # 3. 檢查目標資料夾內是否有重複檔案
+            if self.cancel_requested:
+                return
+
             target_ext = f".{format_type}"
-            dup = downloader.find_existing_duplicate(output_dir, song['title'], target_ext)
+            safe_title = downloader.sanitize_filename(song['title'])
+            prefix_str = song.get('_prefix_str', '')
             custom_stem = None
             overwrite_flag = True
 
-            if dup:
-                dup_filename, dup_path = dup
-                self.log(f"🔍 [查重發現] 資料夾已有相似檔案: {dup_filename}")
-                if self.duplicate_action_all:
-                    action = self.duplicate_action_all
-                else:
-                    action, apply_all = self.ask_duplicate_action(song['title'], dup_filename)
-                    if apply_all:
-                        self.duplicate_action_all = action
+            # 3. 查重防覆蓋處理（使用 Lock 保證只會跳出一個重複對話框）
+            with self.duplicate_lock:
+                if self.cancel_requested:
+                    return
+                dup = downloader.find_existing_duplicate(output_dir, song['title'], target_ext)
+                if dup:
+                    dup_filename, dup_path = dup
+                    self.log(f"🔍 [查重發現] 資料夾已有相似檔案: {dup_filename}")
+                    if self.duplicate_action_all:
+                        action = self.duplicate_action_all
+                    else:
+                        action, apply_all = self.ask_duplicate_action(song['title'], dup_filename)
+                        if apply_all:
+                            self.duplicate_action_all = action
 
-                if action == "skip":
-                    skip_count += 1
-                    self.log(f"⏭️ [略過] 使用者選擇略過: {song['title']}")
-                    self.after(0, lambda s=song: self._update_song_status(s, "⏭️ 已略過 (重複)", "#94a3b8"))
-                    pct = i / total
-                    self.after(0, lambda p=pct: self.prog_bar.set(p))
-                    continue
+                    if action == "skip":
+                        with prog_lock:
+                            skip_count += 1
+                            completed_count += 1
+                            pct = completed_count / total
+                            self.after(0, lambda p=pct: self.prog_bar.set(p))
+                        self.log(f"⏭️ [略過] 略過重複歌曲: {song['title']}")
+                        self.after(0, lambda s=song: self._update_song_status(s, "⏭️ 已略過", "#94a3b8"))
+                        return
 
-                elif action == "suffix":
-                    prefix_str = f"{curr_num:03d} - " if curr_num is not None else ""
-                    safe_title = downloader.sanitize_filename(song['title'])
-                    custom_stem, _ = downloader.get_unique_suffix_stem(output_dir, prefix_str, safe_title, target_ext)
-                    self.log(f"➕ [後綴] 為避免衝突，產生新檔名: {custom_stem}{target_ext}")
-                    overwrite_flag = False
+                    elif action == "suffix":
+                        custom_stem, _ = downloader.get_unique_suffix_stem(output_dir, prefix_str, safe_title, target_ext)
+                        self.log(f"➕ [後綴] 為避免衝突，產生新檔名: {custom_stem}{target_ext}")
+                        overwrite_flag = False
 
-                else:  # "overwrite"
-                    self.log(f"🔁 [覆蓋] 使用者選擇覆蓋舊檔: {dup_filename}")
-                    overwrite_flag = True
+                    else:
+                        self.log(f"🔁 [覆蓋] 覆蓋舊檔: {dup_filename}")
+                        overwrite_flag = True
 
             # 4. 開始執行下載
-            num_prefix = f"{curr_num:03d} - " if (curr_num is not None and not custom_stem) else ""
-            display_name = f"{custom_stem}{target_ext}" if custom_stem else f"{num_prefix}{song['title']}"
-
+            display_name = f"{custom_stem}{target_ext}" if custom_stem else f"{prefix_str}{song['title']}"
             self.after(0, lambda s=song: self._update_song_status(s, "⚡ 下載中...", "#f59e0b"))
-            self.after(0, lambda idx=i, t=total, dn=display_name: self.lbl_status.configure(text=f"📥 [{idx}/{t}] 正在下載: {dn}"))
-            self.log(f"📥 [{i}/{total}] 正在處理: {display_name}")
+            self.log(f"📥 [{song_idx}/{total}] 啟動下載: {display_name}")
+
+            def _song_hook(d):
+                if d.get('status') == 'downloading':
+                    pct = d.get('_percent_str', '').strip()
+                    if pct:
+                        self.after(0, lambda s=song, p=pct: self._update_song_status(s, f"⚡ 下載中 ({p})", "#f59e0b"))
+                elif d.get('status') == 'finished':
+                    self.after(0, lambda s=song: self._update_song_status(s, "🔄 轉檔中...", "#38bdf8"))
 
             try:
                 media_path = downloader.download_media(
@@ -2769,36 +2849,55 @@ class MediaDownloaderApp(ctk.CTk):
                     quality=quality,
                     embed_thumbnail=embed_thumb,
                     embed_metadata=embed_meta,
-                    number_prefix=num_prefix if curr_num is not None and not custom_stem else None,
+                    progress_hook=_song_hook,
+                    number_prefix=prefix_str if not custom_stem else None,
                     custom_filename=custom_stem,
                     overwrite=overwrite_flag,
                     log_callback=self.log,
-                    cancel_check=lambda: self.cancel_requested
+                    cancel_check=lambda: self.cancel_requested,
+                    pause_check=lambda: not self.pause_event.is_set()
                 )
                 song['file_path'] = media_path
                 song['error'] = None
-                success_count += 1
-                if curr_num is not None:
-                    curr_num += 1
-                self.log(f"✅ 成功完成 [{i}/{total}]: {os.path.basename(media_path)}")
+                with prog_lock:
+                    success_count += 1
+                    completed_count += 1
+                    pct = completed_count / total
+                    self.after(0, lambda p=pct: self.prog_bar.set(p))
+                    self.after(0, lambda c=completed_count, t=total: self.lbl_status.configure(text=f"📥 下載進度: [{c}/{t}] 首完成"))
+                self.log(f"✅ 成功完成 [{song_idx}/{total}]: {os.path.basename(media_path)}")
                 self.after(0, lambda s=song: self._update_song_status(s, "✅ 已完成", "#10b981"))
 
             except Exception as ex:
+                with prog_lock:
+                    completed_count += 1
+                    pct = completed_count / total
+                    self.after(0, lambda p=pct: self.prog_bar.set(p))
                 if self.cancel_requested:
-                    self.after(0, lambda s=song: self._update_song_status(s, "⏹️ 已取消", "#64748b"))
-                    break
-                fail_count += 1
+                    self.after(0, lambda s=song: self._update_song_status(s, "⏹️ 已停止", "#64748b"))
+                    return
+                with prog_lock:
+                    fail_count += 1
                 full_err = str(ex)
                 song['error'] = full_err
                 self.failed_items.append({'song': song, 'title': song['title'], 'url': song['url'], 'error': full_err})
-                self.log(f"❌ 下載失敗: {song['title']} | 原因: {full_err}")
+                self.log(f"❌ 下載失敗 [{song_idx}/{total}]: {song['title']} | 原因: {full_err}")
                 self.after(0, lambda s=song: self._update_song_status(s, "❌ 失敗 (點擊看原因)", "#ef4444", error_clickable=True))
 
-            pct = i / total
-            self.after(0, lambda p=pct: self.prog_bar.set(p))
+        from concurrent.futures import ThreadPoolExecutor
+        workers = max(1, min(max_workers, len(songs)))
+        self.log(f"🚀 多線程併發引擎已啟用：同時執行線程 = {workers}，FFmpeg 全核心加速已就緒")
 
-        if curr_num is not None:
-            self.next_number = curr_num
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(download_single_song, i, song) for i, song in enumerate(songs, 1)]
+            for future in futures:
+                try:
+                    future.result()
+                except Exception:
+                    pass
+
+        if start_num is not None:
+            self.next_number = start_num + len(songs)
 
         self.after(0, lambda: self._on_download_finished(success_count, skip_count, fail_count, output_dir, format_type))
 
@@ -2814,10 +2913,12 @@ class MediaDownloaderApp(ctk.CTk):
         self.is_running = False
         self.is_paused = False
 
-        # 切換回主下載按鈕
-        self.run_controls_frame.grid_remove()
-        self.btn_download.grid(row=0, column=0, sticky="ew")
-        self.btn_download.configure(state="normal")
+        # 恢復按鈕狀態（主按鈕恢復為可點擊，暫停與停止變為 disabled）
+        fmt = extract_format_code(self.opt_format.get())
+        pattern = i18n.t("btn_start_download_pattern")
+        self.btn_download.configure(state="normal", fg_color="#10b981", text=pattern.format(fmt=fmt.upper()))
+        self.btn_pause.configure(state="disabled", fg_color="#334155", text=i18n.t("btn_pause"))
+        self.btn_cancel.configure(state="disabled", fg_color="#334155", text=i18n.t("btn_cancel"))
         self.btn_add.configure(state="normal")
 
         if self.cancel_requested:

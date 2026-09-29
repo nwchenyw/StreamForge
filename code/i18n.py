@@ -205,6 +205,16 @@ STRINGS = {
         "fr_FR": "🔍 Vérifier le format de numérotation",
         "de_DE": "🔍 Nummerierungsformat prüfen",
     },
+    "lbl_threads": {
+        "zh_TW": "⚡ 多線程併發：",
+        "en_US": "⚡ Threads:",
+        "zh_CN": "⚡ 多线程并发：",
+        "ja_JP": "⚡ 並行スレッド：",
+        "ko_KR": "⚡ 병렬 스레드：",
+        "es_ES": "⚡ Hilos:",
+        "fr_FR": "⚡ Threads :",
+        "de_DE": "⚡ Threads:",
+    },
     "lbl_media_type": {
         "zh_TW": "媒體類型：",
         "en_US": "Type:",

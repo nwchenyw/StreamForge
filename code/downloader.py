@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import time
 import uuid
 import zipfile
 from typing import List, Dict, Tuple, Callable, Optional
@@ -412,11 +413,12 @@ def download_media(
     log_callback: Optional[Callable[[str], None]] = None,
     custom_filename: Optional[str] = None, # 自訂完整檔名 (不含副檔名)
     overwrite: bool = True,
-    cancel_check: Optional[Callable[[], bool]] = None
+    cancel_check: Optional[Callable[[], bool]] = None,
+    pause_check: Optional[Callable[[], bool]] = None
 ) -> str:
     """
     下載媒體並轉檔為指定音訊 (MP3/M4A/WAV/FLAC/AAC/OGG/OPUS) 或視訊 (MP4/MKV/WEBM/MOV/AVI)
-    可指定數字前綴 (如 "001 - ")、自訂檔名、是否覆蓋、即時日誌與取消檢查
+    可指定數字前綴 (如 "001 - ")、自訂檔名、是否覆蓋、即時日誌與取消/暫停檢查
     回傳產生的檔案路徑
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -429,6 +431,14 @@ def download_media(
 
     fmt = format_type.strip().lower()
     postprocessors = []
+
+    # FFmpeg 多核心加速參數 (-threads 0 自動調用 CPU 全核心多線程)
+    ffmpeg_multithread_args = {
+        'FFmpegExtractAudio': ['-threads', '0'],
+        'FFmpegVideoConvertor': ['-threads', '0'],
+        'FFmpegMerger': ['-threads', '0'],
+        'FFmpegMetadata': ['-threads', '0'],
+    }
 
     if fmt in AUDIO_FORMATS:
         format_spec = 'bestaudio/best'
@@ -498,6 +508,8 @@ def download_media(
             'file_access_retries': 3,
             'socket_timeout': 30,
             'geo_bypass': True,
+            'concurrent_fragment_downloads': 4,
+            'postprocessor_args': ffmpeg_multithread_args,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['ios', 'android', 'mweb', 'web']
@@ -535,6 +547,8 @@ def download_media(
             'file_access_retries': 3,
             'socket_timeout': 30,
             'geo_bypass': True,
+            'concurrent_fragment_downloads': 4,
+            'postprocessor_args': ffmpeg_multithread_args,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['ios', 'android', 'mweb', 'web']
@@ -551,20 +565,40 @@ def download_media(
     else:
         ydl_opts['quiet'] = True
 
-    # 內部進度與取消攔截勾點
+    # 內部進度、暫停與取消攔截勾點 (帶 250ms 限頻避免介面阻塞)
+    last_hook_time = [0.0]
+
     def _internal_hook(d):
         if cancel_check and cancel_check():
             raise Exception("下載已被使用者取消")
+
+        if pause_check:
+            while pause_check():
+                if cancel_check and cancel_check():
+                    raise Exception("下載已被使用者取消")
+                time.sleep(0.2)
+
+        now = time.time()
+        status = d.get('status')
+        if status == 'finished':
+            if progress_hook:
+                progress_hook(d)
+            if log_callback:
+                log_callback("[轉檔中] 串流下載完成，正在由 FFmpeg 全核心轉檔與注入標籤...")
+            return
+
+        if now - last_hook_time[0] < 0.25:
+            return
+        last_hook_time[0] = now
+
         if progress_hook:
             progress_hook(d)
-        if log_callback and d.get('status') == 'downloading':
+        if log_callback and status == 'downloading':
             pct = d.get('_percent_str', '').strip()
             speed = d.get('_speed_str', '').strip()
             eta = d.get('_eta_str', '').strip()
             if pct:
                 log_callback(f"[下載進度] {pct} | 速度: {speed} | 剩餘: {eta}")
-        elif log_callback and d.get('status') == 'finished':
-            log_callback("[轉檔中] 串流下載完成，正在由 FFmpeg 轉檔與注入標籤...")
 
     ydl_opts['progress_hooks'] = [_internal_hook]
 
@@ -618,7 +652,7 @@ def convert_local_media(
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
 
-    cmd = [ffmpeg_bin, "-y", "-i", input_path]
+    cmd = [ffmpeg_bin, "-y", "-threads", "0", "-i", input_path]
 
     # 音訊編碼設定
     if fmt == 'mp3':
