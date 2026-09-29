@@ -30,7 +30,10 @@ except Exception:
 
 import yt_dlp
 
-AUDIO_EXTENSIONS = ('.mp3', '.mp4', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.mkv', '.webm')
+AUDIO_FORMATS = ('mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus')
+VIDEO_FORMATS = ('mp4', 'mkv', 'webm', 'mov', 'avi')
+MEDIA_EXTENSIONS = ('.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.opus', '.mp4', '.mkv', '.webm', '.mov', '.avi', '.wma', '.flv')
+AUDIO_EXTENSIONS = MEDIA_EXTENSIONS  # 向後相容
 NUMBER_PATTERN = re.compile(r'^(\d{1,4})(?:[\s_\-\.]+|\s*-\s*)(.+)$')
 
 def natural_sort_key(s: str):
@@ -389,11 +392,19 @@ class YTDLCommandLogger:
         if self.log_callback:
             self.log_callback(f"[yt-dlp 錯誤] {msg.strip()}")
 
+def get_ffmpeg_executable() -> str:
+    """獲取可用的 ffmpeg 執行檔路徑"""
+    for p in search_paths:
+        cand = os.path.join(p, "ffmpeg.exe" if sys.platform.startswith("win") else "ffmpeg")
+        if os.path.exists(cand):
+            return cand
+    return "ffmpeg"
+
 def download_media(
     url: str,
     output_dir: str,
-    format_type: str = "mp3",  # "mp3" 或 "mp4"
-    quality: str = "320",      # mp3: 320, 256, 192, 128; mp4: best, 1080, 720, 480, 360
+    format_type: str = "mp3",  # mp3, m4a, wav, flac, aac, ogg, opus, mp4, mkv, webm, mov, avi
+    quality: str = "320",      # 音訊: 320, 256, 192, 128; 視訊: best, 2160, 1440, 1080, 720, 480, 360
     embed_thumbnail: bool = True,
     embed_metadata: bool = True,
     progress_hook: Optional[Callable[[Dict], None]] = None,
@@ -404,7 +415,7 @@ def download_media(
     cancel_check: Optional[Callable[[], bool]] = None
 ) -> str:
     """
-    下載媒體並轉檔為 MP3 或 MP4
+    下載媒體並轉檔為指定音訊 (MP3/M4A/WAV/FLAC/AAC/OGG/OPUS) 或視訊 (MP4/MKV/WEBM/MOV/AVI)
     可指定數字前綴 (如 "001 - ")、自訂檔名、是否覆蓋、即時日誌與取消檢查
     回傳產生的檔案路徑
     """
@@ -416,25 +427,71 @@ def download_media(
     else:
         outtmpl = os.path.join(output_dir, f"{prefix_str}%(title)s.%(ext)s")
 
+    fmt = format_type.strip().lower()
     postprocessors = []
 
-    if format_type.lower() == "mp3":
+    if fmt in AUDIO_FORMATS:
         format_spec = 'bestaudio/best'
-        postprocessors.append({
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': quality,
-        })
+        target_ext = f'.{fmt}'
+
+        if fmt == 'mp3':
+            q_val = quality if quality.isdigit() else '320'
+            postprocessors.append({
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': q_val,
+            })
+        elif fmt == 'm4a':
+            format_spec = 'bestaudio[ext=m4a]/bestaudio/best'
+            q_val = quality if quality.isdigit() else '320'
+            postprocessors.append({
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'm4a',
+                'preferredquality': q_val,
+            })
+        elif fmt == 'wav':
+            postprocessors.append({
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'wav',
+            })
+        elif fmt == 'flac':
+            postprocessors.append({
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'flac',
+            })
+        elif fmt == 'aac':
+            q_val = quality if quality.isdigit() else '320'
+            postprocessors.append({
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'aac',
+                'preferredquality': q_val,
+            })
+        elif fmt == 'ogg':
+            q_val = quality if quality.isdigit() else '320'
+            postprocessors.append({
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'vorbis',
+                'preferredquality': q_val,
+            })
+        elif fmt == 'opus':
+            format_spec = 'bestaudio[ext=opus]/bestaudio/best'
+            q_val = quality if quality.isdigit() else '320'
+            postprocessors.append({
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'opus',
+                'preferredquality': q_val,
+            })
+
         if embed_metadata:
             postprocessors.append({'key': 'FFmpegMetadata'})
-        if embed_thumbnail:
+        if embed_thumbnail and fmt in ('mp3', 'm4a', 'flac', 'ogg'):
             postprocessors.append({'key': 'EmbedThumbnail'})
 
         ydl_opts = {
             'format': format_spec,
             'outtmpl': outtmpl,
             'postprocessors': postprocessors,
-            'writethumbnail': embed_thumbnail,
+            'writethumbnail': embed_thumbnail and fmt in ('mp3', 'm4a', 'flac', 'ogg'),
             'overwrites': overwrite,
             'retries': 10,
             'fragment_retries': 10,
@@ -450,14 +507,19 @@ def download_media(
             'js_runtimes': {'node': {}},
             'remote_components': ['ejs:github'],
         }
-        target_ext = '.mp3'
 
     else:
-        # MP4 模式
-        if quality.lower() == "best" or not quality.isdigit():
-            format_spec = 'bv*[vcodec^=avc]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b'
+        # 視訊模式 (MP4, MKV, WEBM, MOV, AVI)
+        target_ext = f'.{fmt}' if fmt in VIDEO_FORMATS else '.mp4'
+        merge_fmt = fmt if fmt in VIDEO_FORMATS else 'mp4'
+
+        height_limit = f"[height<={quality}]" if quality.isdigit() else ""
+        if fmt == "webm":
+            format_spec = f'bv*{height_limit}[vcodec^=vp9]+ba[ext=opus]/bv*{height_limit}+ba/b'
+        elif fmt == "mp4":
+            format_spec = f'bv*{height_limit}[vcodec^=avc]+ba[ext=m4a]/b{height_limit}[ext=mp4]/bv*{height_limit}+ba/b'
         else:
-            format_spec = f'bv*[height<={quality}][vcodec^=avc]+ba[ext=m4a]/b[height<={quality}][ext=mp4]/bv*[height<={quality}]+ba/b'
+            format_spec = f'bv*{height_limit}+ba/b{height_limit}/b'
 
         if embed_metadata:
             postprocessors.append({'key': 'FFmpegMetadata'})
@@ -465,7 +527,7 @@ def download_media(
         ydl_opts = {
             'format': format_spec,
             'outtmpl': outtmpl,
-            'merge_output_format': 'mp4',
+            'merge_output_format': merge_fmt,
             'postprocessors': postprocessors,
             'overwrites': overwrite,
             'retries': 10,
@@ -482,7 +544,6 @@ def download_media(
             'js_runtimes': {'node': {}},
             'remote_components': ['ejs:github'],
         }
-        target_ext = '.mp4'
 
     if log_callback:
         ydl_opts['logger'] = YTDLCommandLogger(log_callback)
@@ -533,6 +594,106 @@ def download_media(
 
 # 向後相容別名
 download_audio_to_mp3 = download_media
+
+def convert_local_media(
+    input_path: str,
+    output_path: str,
+    target_format: str,
+    quality: str = "320",
+    log_callback: Optional[Callable[[str], None]] = None,
+    cancel_check: Optional[Callable[[], bool]] = None
+) -> str:
+    """
+    使用內建 FFmpeg 將本機現有影音檔案轉檔為指定格式 (完整取代格式工廠)
+    支援 MP3, M4A, WAV, FLAC, AAC, OGG, OPUS, MP4, MKV, WEBM, MOV, AVI
+    """
+    import subprocess
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"找不到來源檔案: {input_path}")
+
+    ffmpeg_bin = get_ffmpeg_executable()
+    fmt = target_format.lower().lstrip('.')
+    
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    cmd = [ffmpeg_bin, "-y", "-i", input_path]
+
+    # 音訊編碼設定
+    if fmt == 'mp3':
+        q_val = quality if quality.isdigit() else '320'
+        cmd.extend(["-vn", "-c:a", "libmp3lame", "-b:a", f"{q_val}k", "-id3v2_version", "3"])
+    elif fmt == 'm4a':
+        q_val = quality if quality.isdigit() else '320'
+        cmd.extend(["-vn", "-c:a", "aac", "-b:a", f"{q_val}k"])
+    elif fmt == 'wav':
+        cmd.extend(["-vn", "-c:a", "pcm_s16le"])
+    elif fmt == 'flac':
+        cmd.extend(["-vn", "-c:a", "flac"])
+    elif fmt == 'aac':
+        q_val = quality if quality.isdigit() else '320'
+        cmd.extend(["-vn", "-c:a", "aac", "-b:a", f"{q_val}k"])
+    elif fmt == 'ogg':
+        q_val = quality if quality.isdigit() else '320'
+        cmd.extend(["-vn", "-c:a", "libvorbis", "-b:a", f"{q_val}k"])
+    elif fmt == 'opus':
+        q_val = quality if quality.isdigit() else '320'
+        cmd.extend(["-vn", "-c:a", "libopus", "-b:a", f"{q_val}k"])
+    elif fmt == 'mp4':
+        cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", "22", "-c:a", "aac", "-b:a", "192k"])
+    elif fmt == 'mkv':
+        cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", "22", "-c:a", "aac", "-b:a", "192k"])
+    elif fmt == 'webm':
+        cmd.extend(["-c:v", "libvpx-vp9", "-crf", "30", "-b:v", "0", "-c:a", "libopus", "-b:a", "128k"])
+    elif fmt == 'mov':
+        cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", "22", "-c:a", "aac", "-b:a", "192k"])
+    elif fmt == 'avi':
+        cmd.extend(["-c:v", "mpeg4", "-qscale:v", "3", "-c:a", "libmp3lame", "-b:a", "192k"])
+    else:
+        cmd.extend(["-c", "copy"])
+
+    cmd.append(output_path)
+
+    if log_callback:
+        log_callback(f"[格式工廠] 正在轉檔: {os.path.basename(input_path)} -> {os.path.basename(output_path)} (格式: {fmt.upper()})")
+
+    startupinfo = None
+    if sys.platform.startswith("win"):
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        startupinfo=startupinfo,
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0
+    )
+
+    _, stderr = proc.communicate()
+
+    if cancel_check and cancel_check():
+        proc.kill()
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except Exception:
+                pass
+        raise Exception("轉檔已被使用者取消")
+
+    if proc.returncode != 0:
+        err_msg = stderr.strip().splitlines()[-4:] if stderr else ["未知轉檔錯誤"]
+        raise Exception(f"FFmpeg 轉檔失敗 (代碼 {proc.returncode}): {' '.join(err_msg)}")
+
+    if log_callback:
+        log_callback(f"🎉 [格式工廠] 轉檔完成: {os.path.basename(output_path)}")
+
+    return output_path
 
 def create_zip_archive(file_paths: List[str], zip_output_path: str) -> str:
     """將多個檔案壓縮成一個 ZIP 壓縮檔"""

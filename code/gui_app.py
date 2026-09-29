@@ -26,6 +26,50 @@ GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
 CONFIG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "StreamForge")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
+# ================= 支援多格式與格式工廠定義 =================
+AUDIO_FORMAT_OPTIONS = [
+    "MP3 (最通用/推薦)",
+    "M4A (Apple/AAC)",
+    "WAV (無損未壓縮/剪輯)",
+    "FLAC (無損高保真)",
+    "AAC (現代串流)",
+    "OGG (開源多媒體)",
+    "OPUS (高質高效)",
+]
+VIDEO_FORMAT_OPTIONS = [
+    "MP4 (通用視訊/推薦)",
+    "MKV (高清多軌)",
+    "WEBM (網頁高效)",
+    "MOV (QuickTime/剪輯)",
+    "AVI (傳統視訊)",
+]
+AUDIO_QUALITIES_LOSSY = [
+    "320 kbps (最高品質/推薦)",
+    "256 kbps (高質量)",
+    "192 kbps (標準)",
+    "128 kbps (輕巧)"
+]
+AUDIO_QUALITIES_LOSSLESS = [
+    "無損音質 (Lossless / 原音還原)"
+]
+VIDEO_QUALITIES = [
+    "最高畫質 (最佳/推薦)",
+    "2160p (4K Ultra HD)",
+    "1440p (2K Quad HD)",
+    "1080p (Full HD)",
+    "720p (HD)",
+    "480p (標清)",
+    "360p (節省空間)"
+]
+
+def extract_format_code(display_str: str) -> str:
+    """從格式顯示名稱提取純副檔名 (如 'mp3', 'wav', 'mp4')"""
+    s = display_str.split()[0].lower().strip()
+    for f in ('mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'mp4', 'mkv', 'webm', 'mov', 'avi'):
+        if s.startswith(f):
+            return f
+    return "mp3"
+
 
 def load_app_config() -> dict:
     """載入應用程式使用者設定"""
@@ -257,6 +301,343 @@ def _prompt_update(parent, new_version, release_url, direct_exe_url=None):
         if res:
             webbrowser.open(release_url)
 
+
+
+class FormatFactoryDialog(ctk.CTkToplevel):
+    """
+    StreamForge 格式工廠 · 本地媒體轉檔視窗
+    允許選取本機現有影音檔案，使用內建高效 FFmpeg 批次轉檔為各種音訊或視訊格式
+    """
+    def __init__(self, parent, default_out_dir: str = "", log_callback: Optional[Callable[[str], None]] = None):
+        super().__init__(parent)
+        self.title("🎛️ StreamForge 格式工廠 · 本地媒體轉檔")
+        self.geometry("680x580")
+        self.minsize(580, 480)
+        self.transient(parent)
+        self.grab_set()
+
+        self.parent = parent
+        self.log_callback = log_callback
+        self.files_to_convert = []
+        self.default_out_dir = default_out_dir or os.path.join(os.path.expanduser("~"), "Downloads", "StreamForge")
+
+        # 頂部標題
+        top_frame = ctk.CTkFrame(self, fg_color="transparent")
+        top_frame.pack(fill="x", padx=20, pady=(16, 8))
+
+        lbl_t = ctk.CTkLabel(
+            top_frame,
+            text="🎛️ 本地多媒體格式工廠 (FFmpeg 核心加速)",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#38bdf8"
+        )
+        lbl_t.pack(anchor="w")
+
+        lbl_sub = ctk.CTkLabel(
+            top_frame,
+            text="直接在本機批次轉換音訊或影片格式，支援 MP3, WAV, FLAC, M4A, AAC, OGG, OPUS, MP4, MKV, WEBM, MOV, AVI 等",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8"
+        )
+        lbl_sub.pack(anchor="w", pady=(2, 0))
+
+        # 1. 檔案選取區塊
+        file_box = ctk.CTkFrame(self, corner_radius=8)
+        file_box.pack(fill="both", expand=True, padx=20, pady=8)
+
+        file_toolbar = ctk.CTkFrame(file_box, fg_color="transparent")
+        file_toolbar.pack(fill="x", padx=12, pady=(10, 6))
+
+        btn_add = ctk.CTkButton(
+            file_toolbar,
+            text="📁 選取檔案 (可多選)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._choose_files,
+            width=140
+        )
+        btn_add.pack(side="left", padx=(0, 8))
+
+        btn_clear = ctk.CTkButton(
+            file_toolbar,
+            text="🗑️ 清空清單",
+            font=ctk.CTkFont(size=12),
+            fg_color="#475569",
+            hover_color="#334155",
+            command=self._clear_files,
+            width=90
+        )
+        btn_clear.pack(side="left")
+
+        self.lbl_file_count = ctk.CTkLabel(
+            file_toolbar,
+            text="已選擇 0 個檔案",
+            font=ctk.CTkFont(size=12),
+            text_color="#cbd5e1"
+        )
+        self.lbl_file_count.pack(side="right")
+
+        self.scroll_files = ctk.CTkScrollableFrame(file_box, height=140)
+        self.scroll_files.pack(fill="both", expand=True, padx=12, pady=(0, 10))
+
+        # 2. 轉檔目標設定區塊
+        opts_frame = ctk.CTkFrame(self, corner_radius=8)
+        opts_frame.pack(fill="x", padx=20, pady=6)
+
+        r1 = ctk.CTkFrame(opts_frame, fg_color="transparent")
+        r1.pack(fill="x", padx=12, pady=(10, 6))
+
+        ctk.CTkLabel(r1, text="目標類型：", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(0, 4))
+        self.seg_conv_type = ctk.CTkSegmentedButton(
+            r1,
+            values=["🎵 音訊", "🎬 視訊"],
+            command=self._on_type_changed,
+            width=140
+        )
+        self.seg_conv_type.set("🎵 音訊")
+        self.seg_conv_type.pack(side="left", padx=(0, 14))
+
+        ctk.CTkLabel(r1, text="目標格式：", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(0, 4))
+        self.opt_conv_format = ctk.CTkOptionMenu(
+            r1,
+            values=AUDIO_FORMAT_OPTIONS,
+            command=self._on_format_changed,
+            width=150
+        )
+        self.opt_conv_format.set(AUDIO_FORMAT_OPTIONS[0])
+        self.opt_conv_format.pack(side="left", padx=(0, 14))
+
+        ctk.CTkLabel(r1, text="輸出品質：", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(0, 4))
+        self.opt_conv_quality = ctk.CTkOptionMenu(
+            r1,
+            values=AUDIO_QUALITIES_LOSSY,
+            width=150
+        )
+        self.opt_conv_quality.set(AUDIO_QUALITIES_LOSSY[0])
+        self.opt_conv_quality.pack(side="left")
+
+        # 儲存目錄
+        r2 = ctk.CTkFrame(opts_frame, fg_color="transparent")
+        r2.pack(fill="x", padx=12, pady=(4, 10))
+
+        ctk.CTkLabel(r2, text="儲存目錄：", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(0, 4))
+        self.entry_out_dir = ctk.CTkEntry(r2, height=30)
+        self.entry_out_dir.insert(0, self.default_out_dir)
+        self.entry_out_dir.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        btn_browse = ctk.CTkButton(
+            r2,
+            text="瀏覽...",
+            width=70,
+            height=30,
+            command=self._browse_dir
+        )
+        btn_browse.pack(side="left")
+
+        # 3. 進度與執行列
+        action_frame = ctk.CTkFrame(self, fg_color="transparent")
+        action_frame.pack(fill="x", padx=20, pady=(6, 16))
+
+        self.lbl_conv_status = ctk.CTkLabel(
+            action_frame,
+            text="就緒，請選取檔案後點擊「開始批次轉檔」",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8"
+        )
+        self.lbl_conv_status.pack(anchor="w", pady=(0, 4))
+
+        self.progress_bar = ctk.CTkProgressBar(action_frame, height=12)
+        self.progress_bar.pack(fill="x", pady=(0, 10))
+        self.progress_bar.set(0.0)
+
+        btn_row = ctk.CTkFrame(action_frame, fg_color="transparent")
+        btn_row.pack(fill="x")
+
+        self.btn_start = ctk.CTkButton(
+            btn_row,
+            text="🚀 開始批次轉檔",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#10b981",
+            hover_color="#059669",
+            height=34,
+            command=self._start_convert
+        )
+        self.btn_start.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        self.btn_open_out = ctk.CTkButton(
+            btn_row,
+            text="📂 開啟輸出目錄",
+            height=34,
+            fg_color="#334155",
+            hover_color="#475569",
+            command=self._open_output_dir
+        )
+        self.btn_open_out.pack(side="right")
+
+        self._render_file_list()
+
+    def _choose_files(self):
+        filetypes = [
+            ("所有支援媒體格式", "*.mp3;*.wav;*.flac;*.m4a;*.aac;*.ogg;*.opus;*.mp4;*.mkv;*.webm;*.mov;*.avi;*.wma;*.wmv;*.flv;*.ts;*.m4v"),
+            ("音訊檔案 (*.mp3;*.wav;*.flac;*.m4a...)", "*.mp3;*.wav;*.flac;*.m4a;*.aac;*.ogg;*.opus;*.wma"),
+            ("視訊檔案 (*.mp4;*.mkv;*.webm;*.mov...)", "*.mp4;*.mkv;*.webm;*.mov;*.avi;*.wmv;*.flv;*.ts;*.m4v"),
+            ("所有檔案 (*.*)", "*.*")
+        ]
+        chosen = filedialog.askopenfilenames(title="選取要轉檔的檔案", filetypes=filetypes)
+        if chosen:
+            for p in chosen:
+                if p not in self.files_to_convert:
+                    self.files_to_convert.append(p)
+            self._render_file_list()
+
+    def _clear_files(self):
+        self.files_to_convert.clear()
+        self._render_file_list()
+
+    def _render_file_list(self):
+        for w in self.scroll_files.winfo_children():
+            w.destroy()
+
+        self.lbl_file_count.configure(text=f"已選擇 {len(self.files_to_convert)} 個檔案")
+
+        if not self.files_to_convert:
+            lbl_empty = ctk.CTkLabel(
+                self.scroll_files,
+                text="尚未選取任何檔案，請點擊上方「選取檔案」",
+                text_color="#64748b"
+            )
+            lbl_empty.pack(pady=20)
+            return
+
+        for idx, fpath in enumerate(self.files_to_convert):
+            row = ctk.CTkFrame(self.scroll_files, fg_color="#1e293b", corner_radius=6)
+            row.pack(fill="x", pady=2, padx=2)
+
+            fname = os.path.basename(fpath)
+            try:
+                fsize = os.path.getsize(fpath)
+                size_str = f"{fsize / (1024 * 1024):.1f} MB"
+            except Exception:
+                size_str = "未知大小"
+
+            lbl_name = ctk.CTkLabel(
+                row,
+                text=f"{idx + 1}. {fname} ({size_str})",
+                anchor="w",
+                font=ctk.CTkFont(size=12)
+            )
+            lbl_name.pack(side="left", padx=8, fill="x", expand=True)
+
+            btn_del = ctk.CTkButton(
+                row,
+                text="✕",
+                width=24,
+                height=24,
+                fg_color="#ef4444",
+                hover_color="#dc2626",
+                command=lambda p=fpath: self._remove_single_file(p)
+            )
+            btn_del.pack(side="right", padx=6)
+
+    def _remove_single_file(self, path):
+        if path in self.files_to_convert:
+            self.files_to_convert.remove(path)
+            self._render_file_list()
+
+    def _browse_dir(self):
+        p = filedialog.askdirectory(title="選擇轉檔儲存目錄", initialdir=self.entry_out_dir.get())
+        if p:
+            self.entry_out_dir.delete(0, tk.END)
+            self.entry_out_dir.insert(0, p)
+
+    def _open_output_dir(self):
+        d = self.entry_out_dir.get().strip()
+        if os.path.exists(d):
+            try:
+                os.startfile(d)
+            except Exception as ex:
+                messagebox.showerror("錯誤", f"無法開啟目錄: {ex}")
+        else:
+            messagebox.showinfo("提示", "輸出目錄目前尚不存在！")
+
+    def _on_type_changed(self, value):
+        if "視訊" in value:
+            self.opt_conv_format.configure(values=VIDEO_FORMAT_OPTIONS)
+            self.opt_conv_format.set(VIDEO_FORMAT_OPTIONS[0])
+            self._on_format_changed(VIDEO_FORMAT_OPTIONS[0])
+        else:
+            self.opt_conv_format.configure(values=AUDIO_FORMAT_OPTIONS)
+            self.opt_conv_format.set(AUDIO_FORMAT_OPTIONS[0])
+            self._on_format_changed(AUDIO_FORMAT_OPTIONS[0])
+
+    def _on_format_changed(self, value):
+        fmt = extract_format_code(value)
+        if fmt in ('wav', 'flac'):
+            self.opt_conv_quality.configure(values=AUDIO_QUALITIES_LOSSLESS)
+            self.opt_conv_quality.set(AUDIO_QUALITIES_LOSSLESS[0])
+        elif fmt in ('mp3', 'm4a', 'aac', 'ogg', 'opus'):
+            self.opt_conv_quality.configure(values=AUDIO_QUALITIES_LOSSY)
+            self.opt_conv_quality.set(AUDIO_QUALITIES_LOSSY[0])
+        else:
+            self.opt_conv_quality.configure(values=VIDEO_QUALITIES)
+            self.opt_conv_quality.set(VIDEO_QUALITIES[0])
+
+    def _start_convert(self):
+        if not self.files_to_convert:
+            messagebox.showwarning("提示", "請先選取要轉檔的檔案！")
+            return
+
+        out_dir = self.entry_out_dir.get().strip()
+        if not out_dir:
+            messagebox.showwarning("提示", "請設定輸出儲存目錄！")
+            return
+
+        os.makedirs(out_dir, exist_ok=True)
+        target_fmt = extract_format_code(self.opt_conv_format.get())
+        q_raw = self.opt_conv_quality.get()
+        quality = q_raw.split()[0] if q_raw else "320"
+
+        self.btn_start.configure(state="disabled", text="⏳ 轉檔進行中...")
+        self.progress_bar.set(0.0)
+
+        def _worker():
+            total = len(self.files_to_convert)
+            success = 0
+            fail = 0
+
+            for i, src in enumerate(self.files_to_convert, 1):
+                fname = os.path.basename(src)
+                stem, _ = os.path.splitext(fname)
+                out_path = os.path.join(out_dir, f"{stem}.{target_fmt}")
+
+                self.after(0, lambda idx=i, t=total, n=fname: self.lbl_conv_status.configure(
+                    text=f"🔄 [{idx}/{t}] 正在轉檔: {n} -> {target_fmt.upper()}"
+                ))
+
+                try:
+                    downloader.convert_local_media(
+                        input_path=src,
+                        output_path=out_path,
+                        target_format=target_fmt,
+                        quality=quality,
+                        log_callback=self.log_callback
+                    )
+                    success += 1
+                except Exception as ex:
+                    fail += 1
+                    if self.log_callback:
+                        self.log_callback(f"❌ [轉檔失敗] {fname}: {ex}")
+
+                pct = i / total
+                self.after(0, lambda p=pct: self.progress_bar.set(p))
+
+            def _finish():
+                self.btn_start.configure(state="normal", text="🚀 開始批次轉檔")
+                self.lbl_conv_status.configure(text=f"🎉 批次轉檔完成！成功: {success}，失敗: {fail}")
+                messagebox.showinfo("格式工廠轉檔完成", f"🎉 已完成批次轉檔！\n\n成功：{success} 個檔案\n失敗：{fail} 個檔案\n\n輸出目錄：{out_dir}")
+
+            self.after(0, _finish)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
 
 class DuplicateDialog(ctk.CTkToplevel):
@@ -667,7 +1048,7 @@ class MediaDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("StreamForge v1.0.0 · 串流影音工坊 (MP3 / MP4 · 命令終端版)")
+        self.title("StreamForge v1.0.0 · 串流影音工坊 (多格式下載 / 本地轉檔 · 命令終端版)")
         self.geometry("1060 x 870")
         self.minsize(920, 720)
 
@@ -909,39 +1290,77 @@ class MediaDownloaderApp(ctk.CTk):
         )
         self.lbl_num_info.pack(side="left", padx=10)
 
-        # 第 3 列：格式切換 (MP3 / MP4) 與音質/畫質設定
+        # 第 3 列：類型切換 (音訊 / 視訊)、格式選單、品質設定與格式工廠轉檔工具
         opts_box = ctk.CTkFrame(settings_frame, fg_color="transparent")
         opts_box.grid(row=2, column=0, columnspan=5, padx=14, pady=(0, 6), sticky="ew")
 
-        self.lbl_format = ctk.CTkLabel(opts_box, text=i18n.t("lbl_format"), font=ctk.CTkFont(size=12, weight="bold"))
-        self.lbl_format.pack(side="left", padx=(0, 6))
+        self.lbl_type = ctk.CTkLabel(opts_box, text=i18n.t("lbl_media_type"), font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_type.pack(side="left", padx=(0, 4))
 
-        self.seg_format = ctk.CTkSegmentedButton(
+        self.seg_media_type = ctk.CTkSegmentedButton(
             opts_box,
-            values=["🎵 MP3 (純音訊)", "🎬 MP4 (視訊影片)"],
-            command=self._on_format_changed,
-            width=200
+            values=[i18n.t("type_audio"), i18n.t("type_video")],
+            command=self._on_media_type_changed,
+            width=160
         )
-        self.seg_format.set("🎵 MP3 (純音訊)")
-        self.seg_format.pack(side="left", padx=(0, 14))
+        self.seg_media_type.set(i18n.t("type_audio"))
+        self.seg_media_type.pack(side="left", padx=(0, 10))
+
+        self.lbl_format = ctk.CTkLabel(opts_box, text=i18n.t("lbl_format"), font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_format.pack(side="left", padx=(0, 4))
+
+        self.opt_format = ctk.CTkOptionMenu(
+            opts_box,
+            values=AUDIO_FORMAT_OPTIONS,
+            command=self._on_format_changed,
+            width=150
+        )
+        self.opt_format.set(AUDIO_FORMAT_OPTIONS[0])
+        self.opt_format.pack(side="left", padx=(0, 10))
 
         self.lbl_quality = ctk.CTkLabel(opts_box, text=i18n.t("lbl_quality"), font=ctk.CTkFont(size=12, weight="bold"))
-        self.lbl_quality.pack(side="left", padx=(0, 6))
+        self.lbl_quality.pack(side="left", padx=(0, 4))
 
         self.opt_quality = ctk.CTkOptionMenu(
             opts_box,
-            values=["320 kbps (最高品質/推薦)", "256 kbps (高質量)", "192 kbps (標準)", "128 kbps (輕巧)"],
-            width=180
+            values=AUDIO_QUALITIES_LOSSY,
+            width=170
         )
-        self.opt_quality.pack(side="left", padx=(0, 14))
+        self.opt_quality.pack(side="left", padx=(0, 10))
 
         self.chk_thumb = ctk.CTkCheckBox(opts_box, text=i18n.t("chk_thumb"), font=ctk.CTkFont(size=12))
         self.chk_thumb.select()
-        self.chk_thumb.pack(side="left", padx=8)
+        self.chk_thumb.pack(side="left", padx=6)
 
         self.chk_meta = ctk.CTkCheckBox(opts_box, text=i18n.t("chk_meta"), font=ctk.CTkFont(size=12))
         self.chk_meta.select()
-        self.chk_meta.pack(side="left", padx=8)
+        self.chk_meta.pack(side="left", padx=6)
+
+        self.btn_format_factory = ctk.CTkButton(
+            opts_box,
+            text=i18n.t("btn_format_factory"),
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=self.open_format_factory_dialog,
+            height=30
+        )
+        self.btn_format_factory.pack(side="right", padx=(4, 0))
+
+        # 恢復使用者偏好格式
+        pref_fmt = self.app_config.get("preferred_format", "mp3").lower()
+        if pref_fmt in ('mp4', 'mkv', 'webm', 'mov', 'avi'):
+            self.seg_media_type.set(i18n.t("type_video"))
+            self.opt_format.configure(values=VIDEO_FORMAT_OPTIONS)
+            match_opt = next((o for o in VIDEO_FORMAT_OPTIONS if extract_format_code(o) == pref_fmt), VIDEO_FORMAT_OPTIONS[0])
+            self.opt_format.set(match_opt)
+            self._on_format_changed(match_opt)
+        else:
+            self.seg_media_type.set(i18n.t("type_audio"))
+            self.opt_format.configure(values=AUDIO_FORMAT_OPTIONS)
+            match_opt = next((o for o in AUDIO_FORMAT_OPTIONS if extract_format_code(o) == pref_fmt), AUDIO_FORMAT_OPTIONS[0])
+            self.opt_format.set(match_opt)
+            self._on_format_changed(match_opt)
 
         # ================= 4. 歌曲清單管理與滾動展示區 =================
         list_container = ctk.CTkFrame(self, corner_radius=10)
@@ -1229,16 +1648,18 @@ class MediaDownloaderApp(ctk.CTk):
         self.btn_open_folder.configure(text=i18n.t("btn_open_folder"))
         self.chk_numbering.configure(text=i18n.t("chk_auto_number"))
         self.btn_check_format.configure(text=i18n.t("btn_check_format"))
+        self.lbl_type.configure(text=i18n.t("lbl_media_type"))
+        self.seg_media_type.configure(values=[i18n.t("type_audio"), i18n.t("type_video")])
         self.lbl_format.configure(text=i18n.t("lbl_format"))
+        self.btn_format_factory.configure(text=i18n.t("btn_format_factory"))
 
-        fmt = self.seg_format.get()
-        if "MP4" in fmt:
+        fmt = extract_format_code(self.opt_format.get())
+        if fmt in ('mp4', 'mkv', 'webm', 'mov', 'avi'):
             self.lbl_quality.configure(text=i18n.t("lbl_quality_video"))
-            self.btn_download.configure(text=i18n.t("btn_start_download_mp4"))
         else:
             self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
-            self.btn_download.configure(text=i18n.t("btn_start_download_mp3"))
 
+        self.btn_download.configure(text=i18n.t("btn_start_download_pattern").format(fmt=fmt.upper()))
         self.chk_thumb.configure(text=i18n.t("chk_thumb"))
         self.chk_meta.configure(text=i18n.t("chk_meta"))
 
@@ -1371,6 +1792,8 @@ class MediaDownloaderApp(ctk.CTk):
             self._cli_format(args)
         elif cmd in ("quality", "q"):
             self._cli_quality(args)
+        elif cmd in ("convert", "factory"):
+            self.open_format_factory_dialog()
         elif cmd in ("dir", "cd"):
             self._cli_dir(args)
         elif cmd == "usb":
@@ -1422,9 +1845,9 @@ class MediaDownloaderApp(ctk.CTk):
             "  pause                     : 暫停當前下載任務\n"
             "  resume                    : 恢復已暫停的下載任務\n"
             "  cancel / stop             : 取消當前的下載任務\n"
-            "  retry / r                 : 重新下載所有失敗的項目\n"
-            "  format <mp3|mp4> / fmt    : 切換輸出格式 (mp3 或 mp4)\n"
-            "  quality <數值> / q <數值>  : 設定音質(320/256/192/128)或畫質(best/1080/720)\n"
+            "  format <格式> / fmt       : 切換輸出格式 (mp3, wav, flac, m4a, aac, ogg, opus, mp4, mkv, webm, mov, avi)\n"
+            "  quality <數值> / q <數值>  : 設定音質(320/256/192/128/lossless)或畫質(4k/2k/1080/720/480)\n"
+            "  convert / factory         : 開啟本地格式工廠 (批次媒體轉檔工具)\n"
             "  dir [路徑] / cd [路徑]     : 顯示或更換下載儲存目錄\n"
             "  usb                       : 自動偵測並切換至 USB 隨身碟\n"
             "  check                     : 檢查資料夾中的 001 編號格式\n"
@@ -1546,20 +1969,32 @@ class MediaDownloaderApp(ctk.CTk):
 
     def _cli_format(self, args):
         if not args:
-            curr = self.seg_format.get()
-            self.log(f"ℹ️ [CLI] 目前輸出格式為: {curr}。切換請輸入: format mp3 或 format mp4")
+            curr = self.opt_format.get()
+            self.log(f"ℹ️ [CLI] 目前輸出格式為: {curr}。可用格式: mp3, m4a, wav, flac, aac, ogg, opus, mp4, mkv, webm, mov, avi")
             return
-        target = args[0].lower()
-        if "mp4" in target or "video" in target:
-            self.seg_format.set("🎬 MP4 (視訊影片)")
-            self._on_format_changed("🎬 MP4 (視訊影片)")
-            self.log("🎬 [CLI] 輸出格式已切換為: MP4 視訊影片")
-        elif "mp3" in target or "audio" in target:
-            self.seg_format.set("🎵 MP3 (純音訊)")
-            self._on_format_changed("🎵 MP3 (純音訊)")
-            self.log("🎵 [CLI] 輸出格式已切換為: MP3 純音訊")
-        else:
-            self.log("⚠️ [CLI 錯誤] 未知的格式。請輸入: format mp3 或 format mp4")
+        target = args[0].lower().strip()
+        matched = False
+        for opt in VIDEO_FORMAT_OPTIONS:
+            if extract_format_code(opt) == target:
+                self.seg_media_type.set(i18n.t("type_video"))
+                self.opt_format.configure(values=VIDEO_FORMAT_OPTIONS)
+                self.opt_format.set(opt)
+                self._on_format_changed(opt)
+                self.log(f"🎬 [CLI] 輸出格式已切換為: {opt}")
+                matched = True
+                break
+        if not matched:
+            for opt in AUDIO_FORMAT_OPTIONS:
+                if extract_format_code(opt) == target:
+                    self.seg_media_type.set(i18n.t("type_audio"))
+                    self.opt_format.configure(values=AUDIO_FORMAT_OPTIONS)
+                    self.opt_format.set(opt)
+                    self._on_format_changed(opt)
+                    self.log(f"🎵 [CLI] 輸出格式已切換為: {opt}")
+                    matched = True
+                    break
+        if not matched:
+            self.log(f"⚠️ [CLI 錯誤] 未知的格式: {target}。可用音訊: mp3, m4a, wav, flac, aac, ogg, opus；可用視訊: mp4, mkv, webm, mov, avi")
 
     def _cli_quality(self, args):
         if not args:
@@ -1567,9 +2002,13 @@ class MediaDownloaderApp(ctk.CTk):
             self.log(f"ℹ️ [CLI] 目前品質設定為: {curr}")
             return
         val = args[0].lower()
-        fmt = self.seg_format.get()
-        if "MP4" in fmt:
+        fmt = extract_format_code(self.opt_format.get())
+        if fmt in ('mp4', 'mkv', 'webm', 'mov', 'avi'):
             mapping = {
+                "4k": "2160p (4K Ultra HD)",
+                "2160": "2160p (4K Ultra HD)",
+                "2k": "1440p (2K Quad HD)",
+                "1440": "1440p (2K Quad HD)",
                 "best": "最高畫質 (最佳/推薦)",
                 "max": "最高畫質 (最佳/推薦)",
                 "1080": "1080p (Full HD)",
@@ -1583,9 +2022,12 @@ class MediaDownloaderApp(ctk.CTk):
             }
             if val in mapping:
                 self.opt_quality.set(mapping[val])
-                self.log(f"📺 [CLI] MP4 影片畫質已設定為: {mapping[val]}")
+                self.log(f"📺 [CLI] 影片畫質已設定為: {mapping[val]}")
             else:
-                self.log("⚠️ [CLI 錯誤] MP4 可用品質: best, 1080, 720, 480, 360")
+                self.log("⚠️ [CLI 錯誤] 可用畫質: best, 2160, 1440, 1080, 720, 480, 360")
+        elif fmt in ('wav', 'flac'):
+            self.opt_quality.set("無損音質 (Lossless / 原音還原)")
+            self.log("💿 [CLI] WAV/FLAC 固定為無損音質")
         else:
             mapping = {
                 "320": "320 kbps (最高品質/推薦)",
@@ -1599,9 +2041,9 @@ class MediaDownloaderApp(ctk.CTk):
             }
             if val in mapping:
                 self.opt_quality.set(mapping[val])
-                self.log(f"🎧 [CLI] MP3 音質位元率已設定為: {mapping[val]}")
+                self.log(f"🎧 [CLI] 音訊位元率已設定為: {mapping[val]}")
             else:
-                self.log("⚠️ [CLI 錯誤] MP3 可用音質: 320, 256, 192, 128")
+                self.log("⚠️ [CLI 錯誤] 可用音質: 320, 256, 192, 128")
 
     def _cli_dir(self, args):
         if not args:
@@ -1646,7 +2088,7 @@ class MediaDownloaderApp(ctk.CTk):
             "================== 📊 系統當前狀態摘要 ==================\n"
             f"  執行狀態: {running_str}\n"
             f"  歌曲清單: 共 {total} 首 (已勾選 {selected} 首 | 失敗 {failed} 首)\n"
-            f"  輸出格式: {self.seg_format.get()}\n"
+            f"  輸出格式: {self.opt_format.get()}\n"
             f"  輸出品質: {self.opt_quality.get()}\n"
             f"  順序編號: {num_str}\n"
             f"  儲存目錄: {self.entry_dir.get()}\n"
@@ -1741,34 +2183,53 @@ class MediaDownloaderApp(ctk.CTk):
                 self.chk_numbering.deselect()
                 self.lbl_num_info.configure(text="（不加入編號）")
 
-    # ================= 格式切換事件 =================
+    # ================= 格式與媒體類型切換事件 =================
+
+    def _on_media_type_changed(self, value):
+        if "視訊" in value or "Video" in value or "Vídeo" in value or "動画" in value or "비디오" in value:
+            self.opt_format.configure(values=VIDEO_FORMAT_OPTIONS)
+            self.opt_format.set(VIDEO_FORMAT_OPTIONS[0])
+            self._on_format_changed(VIDEO_FORMAT_OPTIONS[0])
+        else:
+            self.opt_format.configure(values=AUDIO_FORMAT_OPTIONS)
+            self.opt_format.set(AUDIO_FORMAT_OPTIONS[0])
+            self._on_format_changed(AUDIO_FORMAT_OPTIONS[0])
 
     def _on_format_changed(self, value):
-        if "MP4" in value:
-            self.lbl_quality.configure(text=i18n.t("lbl_quality_video"))
-            self.opt_quality.configure(values=[
-                "最高畫質 (最佳/推薦)",
-                "1080p (Full HD)",
-                "720p (HD)",
-                "480p (標清)",
-                "360p (節省空間)"
-            ])
-            self.opt_quality.set("最高畫質 (最佳/推薦)")
-            self.chk_thumb.configure(state="disabled")
-            self.btn_download.configure(text=i18n.t("btn_start_download_mp4"))
-            self.log("切換為 🎬 MP4 視訊影片模式")
-        else:
+        fmt = extract_format_code(value)
+        if fmt in ('wav', 'flac'):
             self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
-            self.opt_quality.configure(values=[
-                "320 kbps (最高品質/推薦)",
-                "256 kbps (高質量)",
-                "192 kbps (標準)",
-                "128 kbps (輕巧)"
-            ])
-            self.opt_quality.set("320 kbps (最高品質/推薦)")
-            self.chk_thumb.configure(state="normal")
-            self.btn_download.configure(text=i18n.t("btn_start_download_mp3"))
-            self.log("切換為 🎵 MP3 純音訊模式")
+            self.opt_quality.configure(values=AUDIO_QUALITIES_LOSSLESS)
+            self.opt_quality.set(AUDIO_QUALITIES_LOSSLESS[0])
+            if fmt == 'wav':
+                self.chk_thumb.configure(state="disabled")
+            else:
+                self.chk_thumb.configure(state="normal")
+            self.log(f"切換為 💿 {fmt.upper()} (無損音訊模式)")
+        elif fmt in ('mp3', 'm4a', 'aac', 'ogg', 'opus'):
+            self.lbl_quality.configure(text=i18n.t("lbl_quality_audio"))
+            self.opt_quality.configure(values=AUDIO_QUALITIES_LOSSY)
+            self.opt_quality.set(AUDIO_QUALITIES_LOSSY[0])
+            self.chk_thumb.configure(state="normal" if fmt in ('mp3', 'm4a', 'ogg') else "disabled")
+            self.log(f"切換為 🎵 {fmt.upper()} (純音訊模式)")
+        else:
+            self.lbl_quality.configure(text=i18n.t("lbl_quality_video"))
+            self.opt_quality.configure(values=VIDEO_QUALITIES)
+            self.opt_quality.set(VIDEO_QUALITIES[0])
+            self.chk_thumb.configure(state="disabled")
+            self.log(f"切換為 🎬 {fmt.upper()} (視訊影片模式)")
+
+        pattern = i18n.t("btn_start_download_pattern")
+        self.btn_download.configure(text=pattern.format(fmt=fmt.upper()))
+
+        # 記憶偏好格式
+        self.app_config["preferred_format"] = fmt
+        save_app_config(self.app_config)
+
+    def open_format_factory_dialog(self):
+        """開啟本地多媒體格式工廠轉檔視窗"""
+        curr_dir = self.entry_dir.get().strip() or self.default_download_dir
+        FormatFactoryDialog(self, default_out_dir=curr_dir, log_callback=self.log)
 
     # ================= 互動事件處理 =================
 
@@ -2079,25 +2540,31 @@ class MediaDownloaderApp(ctk.CTk):
             elif check_res['status'] == 'already_numbered':
                 self.next_number = check_res['next_number']
 
-        fmt_choice = self.seg_format.get()
-        format_type = "mp4" if "MP4" in fmt_choice else "mp3"
+        fmt_choice = self.opt_format.get()
+        format_type = extract_format_code(fmt_choice)
 
         q_raw = self.opt_quality.get()
-        if format_type == "mp4":
-            if "最高" in q_raw or "最佳" in q_raw:
-                quality = "best"
+        if format_type in downloader.VIDEO_FORMATS:
+            if "2160" in q_raw or "4k" in q_raw.lower():
+                quality = "2160"
+            elif "1440" in q_raw or "2k" in q_raw.lower():
+                quality = "1440"
             elif "1080" in q_raw:
                 quality = "1080"
             elif "720" in q_raw:
                 quality = "720"
             elif "480" in q_raw:
                 quality = "480"
-            else:
+            elif "360" in q_raw:
                 quality = "360"
+            else:
+                quality = "best"
+        elif format_type in ('wav', 'flac'):
+            quality = "lossless"
         else:
             quality = q_raw.split()[0]
 
-        embed_thumb = bool(self.chk_thumb.get()) and (format_type == "mp3")
+        embed_thumb = bool(self.chk_thumb.get()) and (format_type in ('mp3', 'm4a', 'flac', 'ogg'))
         embed_meta = bool(self.chk_meta.get())
         start_num = self.next_number if use_numbering else None
 
