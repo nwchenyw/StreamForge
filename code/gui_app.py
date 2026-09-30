@@ -206,7 +206,11 @@ def check_for_updates(parent=None, silent=False):
         try:
             req = urllib.request.Request(
                 GITHUB_RELEASES_API,
-                headers={"User-Agent": "StreamForge-Desktop-App"}
+                headers={
+                    "User-Agent": "StreamForge-Desktop-App",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache"
+                }
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
                 if resp.status == 200:
