@@ -2448,21 +2448,26 @@ class MediaDownloaderApp(ctk.CTk):
             s['var'].set(False)
         self.update_stats()
 
-    def clear_song_list(self):
-        if self.is_running:
+    def clear_song_list(self, force=False):
+        if self.is_running and not force:
             messagebox.showwarning("提示", "正在執行下載任務，無法清空清單！", parent=self)
             return
         if not self.songs:
             return
-        if messagebox.askyesno("確認清空", "確定要清空目前清單中的所有歌曲嗎？", parent=self):
-            for w in self.song_widgets:
-                w.destroy()
-            self.song_widgets.clear()
-            self.songs.clear()
-            self.lbl_empty.pack(pady=35)
-            self.btn_retry_failed.pack_forget()
-            self.update_stats()
-            self.log("已清空歌曲清單。")
+
+        for w in list(self.scroll_list.winfo_children()):
+            if w != self.lbl_empty:
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
+
+        self.song_widgets.clear()
+        self.songs.clear()
+        self.lbl_empty.pack(pady=35)
+        self.btn_retry_failed.pack_forget()
+        self.update_stats()
+        self.log("🗑️ 已清空歌曲清單。")
 
     def remove_single_song(self, song_item, row_frame):
         if self.is_running:
@@ -2470,7 +2475,12 @@ class MediaDownloaderApp(ctk.CTk):
             return
         if song_item in self.songs:
             self.songs.remove(song_item)
-        row_frame.destroy()
+        if row_frame in self.song_widgets:
+            self.song_widgets.remove(row_frame)
+        try:
+            row_frame.destroy()
+        except Exception:
+            pass
         if not self.songs:
             self.lbl_empty.pack(pady=35)
             self.btn_retry_failed.pack_forget()
@@ -3108,6 +3118,24 @@ class MediaDownloaderApp(ctk.CTk):
             self.prog_bar.set(1.0)
             self.lbl_status.configure(text=f"🎉 任務完成！成功: {success_count} 首，略過: {skip_count} 首，失敗: {fail_count} 首。")
             self.log(f"🎉 任務執行結束！成功: {success_count} 首 | 略過: {skip_count} 首 | 失敗: {fail_count} 首")
+
+        # 自動清理清單：若全部成功，自動清空；若有失敗，自動移除成功曲目、僅保留失敗曲目方便重試
+        if fail_count == 0 and not self.cancel_requested:
+            self.clear_song_list(force=True)
+            self.log("🧹 本批次曲目已全部下載完成，已為您自動清空駐列清單！")
+        elif fail_count > 0:
+            completed_to_remove = [s for s in list(self.songs) if s.get('status') in ('completed', '⏭️ 已略過')]
+            for s in completed_to_remove:
+                if 'row_widget' in s and s['row_widget'].winfo_exists():
+                    try:
+                        s['row_widget'].destroy()
+                    except Exception:
+                        pass
+                if s in self.songs:
+                    self.songs.remove(s)
+            self.update_stats()
+            if completed_to_remove:
+                self.log(f"🧹 已自動清除 {len(completed_to_remove)} 首已完成曲目，保留 {fail_count} 首失敗項目供您重試。")
 
         # 失敗重試按鈕更新
         if fail_count > 0:
