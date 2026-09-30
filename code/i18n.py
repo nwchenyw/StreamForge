@@ -563,6 +563,16 @@ STRINGS = {
         "fr_FR": "🏢 À propos",
         "de_DE": "🏢 Über uns",
     },
+    "tab_changelog": {
+        "zh_TW": "🚀 更新紀錄",
+        "en_US": "🚀 What's New",
+        "zh_CN": "🚀 更新日志",
+        "ja_JP": "🚀 更新履歴",
+        "ko_KR": "🚀 업데이트 내역",
+        "es_ES": "🚀 Novedades",
+        "fr_FR": "🚀 Nouveautés",
+        "de_DE": "🚀 Neuigkeiten",
+    },
     "tab_disclaimer": {
         "zh_TW": "⚖️ 法律免責聲明",
         "en_US": "⚖️ Legal Disclaimer",

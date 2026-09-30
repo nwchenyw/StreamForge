@@ -963,6 +963,7 @@ class AboutDialog(ctk.CTkToplevel):
         tabview.pack(padx=20, pady=(0, 10), fill="both", expand=True)
 
         tab_about = tabview.add(i18n.t("tab_about"))
+        tab_changelog = tabview.add(i18n.t("tab_changelog"))
         tab_disclaimer = tabview.add(i18n.t("tab_disclaimer"))
         tab_license = tabview.add(i18n.t("tab_license"))
 
@@ -1042,7 +1043,52 @@ class AboutDialog(ctk.CTkToplevel):
         )
         btn_open_repo.pack(side="left")
 
-        # ------------------ Tab 2: 法律免責聲明 ------------------
+        # ------------------ Tab 2: 更新紀錄 (What's New) ------------------
+        changelog_text = (
+            "======================================================================\n"
+            "  StreamForge v1.1.0 (2026-09-30) - 重要功能擴充與問題修復\n"
+            "======================================================================\n\n"
+            "✨ 【全新功能 (New Features)】\n"
+            "----------------------------------------------------------------------\n"
+            "• 🔌 USB 隨身碟動態熱插拔偵測 (Dynamic USB Hotplug Detection)\n"
+            "  - 接入 Windows 原生 WM_DEVICECHANGE 裝置變更通知，即插即用。\n"
+            "  - 插入隨身碟時自動刷新儲存路徑下拉選單，並彈出通知提供一鍵切換。\n"
+            "  - 拔出使用中的隨身碟時，自動無縫回退至預設下載目錄，防止程式崩潰與寫入失敗。\n\n"
+            "• 📑 專屬歌單匯出與匯入 (.sfpl 格式支援)\n"
+            "  - 全新自訂「StreamForge Playlist (.sfpl)」格式，完整備份歌單元資料與歌曲 URL。\n"
+            "  - 支援將現有下載清單一鍵匯出，或隨時匯入分享（可自由選擇覆蓋或追加）。\n"
+            "  - Windows 系統檔案關聯註冊：雙擊任意 .sfpl 檔案即可直接啟動程式並載入清單。\n\n"
+            "🛠️ 【核心下載引擎與問題修復 (Bug Fixes & Stability)】\n"
+            "----------------------------------------------------------------------\n"
+            "• 突破播放清單 100 首限制\n"
+            "  - 移除 YouTube 歌單預設 100 首硬編碼限制，支援完整解析數百首長歌單。\n\n"
+            "• YouTube 403 Forbidden 自動指數退避重試\n"
+            "  - 導入指數退避自動重試（Exponential Backoff Retry）與 10MB 分塊串流，大幅降低被擋機率。\n\n"
+            "• 徹底清理殘留 WEBP 縮圖，防止檔名越來越長\n"
+            "  - 修復下載出錯或轉檔異常時殘留縮圖導致重複編碼與疊加檔名之問題。\n\n"
+            "• 清單清空與自動清理機制\n"
+            "  - 修復手動點擊清空按鈕無反應問題，全面改為非阻塞即時清除。\n"
+            "  - 下載批次完成後自動清理已成功下載之項目，保持介面清爽。\n\n"
+            "📦 【安裝與升級安全機制 (Installer & Security)】\n"
+            "----------------------------------------------------------------------\n"
+            "• 智慧平滑升級模式 (Upgrade Mode)\n"
+            "  - 安裝新版本時自動判定升級，略過維護選單並自動保留個人偏好設定（config.json）。\n\n"
+            "• 解除安裝前程式執行守護 (Uninstall Guard)\n"
+            "  - 解除安裝時主動偵測背景執行中的 StreamForge，若使用者選擇不中斷則立即中止卸載，保護進行中的下載任務。\n\n"
+            "======================================================================\n"
+            "  StreamForge v1.0.0 (2026-09-29) - 首次正式發布\n"
+            "======================================================================\n\n"
+            "• 支援各大主流串流影音平台極速無損下載。\n"
+            "• 內建格式工廠：音訊 (MP3/WAV/FLAC/M4A/AAC/OGG/OPUS) 與影片 (MP4/MKV/WEBM/MOV/AVI)。\n"
+            "• 支援多核心 FFmpeg 轉檔、ID3 標籤與高畫質封面自動嵌入。\n"
+            "• 支援 8 國語言介面即時動態切換。\n"
+        )
+        txt_changelog = ctk.CTkTextbox(tab_changelog, font=ctk.CTkFont(family="Consolas", size=11), text_color="#e2e8f0")
+        txt_changelog.pack(fill="both", expand=True, padx=6, pady=6)
+        txt_changelog.insert("1.0", changelog_text)
+        txt_changelog.configure(state="disabled")
+
+        # ------------------ Tab 3: 法律免責聲明 ------------------
         disclaimer_text = (
             "【法律免責聲明 (Legal Disclaimer)】\n\n"
             "1. 【開源目的與合理使用】\n"

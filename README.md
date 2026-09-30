@@ -20,6 +20,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
 [![i18n](https://img.shields.io/badge/Languages-8%20Supported-purple?style=for-the-badge)](code/i18n.py)
+[![Changelog](https://img.shields.io/badge/Changelog-v1.1.0-blue?style=for-the-badge)](CHANGELOG.md)
 
 <p align="center">
   <b>支援 8 國語言即時切換 · USB 動態熱插拔偵測 · 專屬 .sfpl 歌單匯出匯入 · 隨身碟智慧辨識 · 001 循序編號 · 目標目錄防覆蓋查重 · 失敗診斷與一鍵重試 · 內建交互式命令列 (CLI)</b>
