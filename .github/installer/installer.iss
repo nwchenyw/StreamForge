@@ -77,6 +77,8 @@ chinesetraditional.RepairFinished=StreamForge 程式檔案已成功修復並還�
 chinesetraditional.AppRunningUninstallPrompt=偵測到 StreamForge 正在執行中！%n%n為了安全解除安裝，必須先關閉正在運行的程式。%n請問您是否要立即中斷並關閉 StreamForge？%n%n• 點選【是 (Yes)】：關閉程式並繼續解除安裝%n• 點選【否 (No)】：取消解除安裝（不中斷就不刪除任何檔案）
 chinesetraditional.UninstallAbortedByUser=您已取消解除安裝。StreamForge 仍保持完整，未刪除任何檔案。
 chinesetraditional.AppRunningSetupPrompt=偵測到 StreamForge 正在執行中！%n%n安裝程式需要先關閉正在運行的程式才能繼續更新或安裝檔案。%n請問您是否要立即中斷並關閉 StreamForge？%n%n• 點選【是 (Yes)】：關閉程式並繼續安裝%n• 點選【否 (No)】：取消安裝
+chinesetraditional.UpgradePrompt=偵測到您的電腦中已安裝舊版 StreamForge (版本: %1)！%n%n本安裝精靈將為您直接升級更新至最新版本 (v%2)。%n安裝路徑：%3%n（您的個人偏好設定、下載檔案與紀錄將完整保留）%n%n請問您是否要立即升級更新？%n%n• 點選【是 (Yes)】：立即升級至 v%2%n• 點選【否 (No)】：取消安裝並結束
+chinesetraditional.UpgradeFinished=StreamForge 已成功升級更新至最新版本 (v{#MyAppVersion})！
 
 english.CreateDesktopIcon=Create desktop shortcut
 english.LaunchProgram=Launch StreamForge now
@@ -93,6 +95,8 @@ english.RepairFinished=StreamForge program files have been successfully repaired
 english.AppRunningUninstallPrompt=StreamForge is currently running!%n%nTo uninstall safely, the running application must be closed.%nWould you like to terminate StreamForge now?%n%n• Click [Yes]: Close the application and proceed with uninstallation%n• Click [No]: Cancel uninstallation (no files will be deleted)
 english.UninstallAbortedByUser=Uninstallation cancelled. StreamForge remains intact and no files were deleted.
 english.AppRunningSetupPrompt=StreamForge is currently running!%n%nSetup needs to close the running application to update or install files.%nWould you like to terminate StreamForge now?%n%n• Click [Yes]: Close the application and continue setup%n• Click [No]: Cancel setup
+english.UpgradePrompt=Setup detected an earlier version of StreamForge (v%1) on your system!%n%nThis setup will upgrade it directly to the latest version (v%2).%nInstall Location: %3%n(Your settings and downloaded files will be preserved)%n%nWould you like to upgrade now?%n%n• Click [Yes]: Upgrade to v%2%n• Click [No]: Cancel and exit setup
+english.UpgradeFinished=StreamForge has been successfully upgraded to the latest version (v{#MyAppVersion})!
 
 chinesesimplified.CreateDesktopIcon=创建桌面快捷方式 (&Create desktop shortcut)
 chinesesimplified.LaunchProgram=立即启动 StreamForge
@@ -109,6 +113,8 @@ chinesesimplified.RepairFinished=StreamForge 程序文件已成功修复并还�
 chinesesimplified.AppRunningUninstallPrompt=检测到 StreamForge 正在运行中！%n%n为了安全卸载，必须先关闭正在运行的程序。%n请问您是否要立即中断并关闭 StreamForge？%n%n• 点击【是 (Yes)】：关闭程序并继续卸载%n• 点击【否 (No)】：取消卸载（不中断就不删除任何文件）
 chinesesimplified.UninstallAbortedByUser=您已取消卸载。StreamForge 仍保持完整，未删除任何文件。
 chinesesimplified.AppRunningSetupPrompt=检测到 StreamForge 正在运行中！%n%n安装程序需要先关闭正在运行的程序才能继续更新或安装文件。%n请问您是否要立即中断并关闭 StreamForge？%n%n• 点击【是 (Yes)】：关闭程序并继续安装%n• 点击【否 (No)】：取消安装
+chinesesimplified.UpgradePrompt=检测到您的计算机中已安装旧版 StreamForge (版本: %1)！%n%n本安装向导将为您直接升级更新至最新版本 (v%2)。%n安装路径：%3%n（您的个人偏好设置、下载文件与记录将完整保留）%n%n请问您是否要立即升级更新？%n%n• 点击【是 (Yes)】：立即升级至 v%2%n• 点击【否 (No)】：取消安装并退出
+chinesesimplified.UpgradeFinished=StreamForge 已成功升级更新至最新版本 (v{#MyAppVersion})！
 
 japanese.CreateDesktopIcon=デスクトップにショートカットを作成する (&Create desktop shortcut)
 japanese.LaunchProgram=StreamForge を今すぐ起動
@@ -125,6 +131,8 @@ japanese.RepairFinished=StreamForge プログラムファイルは正常に修�
 japanese.AppRunningUninstallPrompt=StreamForge が現在実行中です！%n%n安全にアンインストールするには、実行中のアプリケーションを終了する必要があります。%nStreamForge を今すぐ終了しますか？%n%n• [はい (Yes)] をクリック：アプリを終了してアンインストールを続行します%n• [いいえ (No)] をクリック：アンインストールをキャンセルします（ファイルは削除されません）
 japanese.UninstallAbortedByUser=アンインストールはキャンセルされました。StreamForge はそのまま保持され、ファイルは削除されていません。
 japanese.AppRunningSetupPrompt=StreamForge が現在実行中です！%n%nファイルを更新またはインストールするには、実行中のアプリを閉じる必要があります。%nStreamForge を今すぐ終了しますか？%n%n• [はい (Yes)] をクリック：アプリを終了してインストールを続行します%n• [いいえ (No)] をクリック：インストールをキャンセルします
+japanese.UpgradePrompt=コンピューターに以前のバージョンの StreamForge (v%1) が検出されました！%n%n最新バージョン (v%2) へ直接アップグレードします。%nインストール先：%3%n（設定とダウンロードファイルは保持されます）%n%n今すぐアップグレードしますか？%n%n• [はい (Yes)] をクリック：v%2 へアップグレード%n• [いいえ (No)] をクリック：キャンセルして終了
+japanese.UpgradeFinished=StreamForge は最新バージョン (v{#MyAppVersion}) に正常にアップグレードされました！
 
 korean.CreateDesktopIcon=바탕 화면 바로가기 만들기 (&Create desktop shortcut)
 korean.LaunchProgram=지금 StreamForge 실행
@@ -141,6 +149,8 @@ korean.RepairFinished=StreamForge 프로그램 파일이 성공적으로 복구 
 korean.AppRunningUninstallPrompt=StreamForge가 현재 실행 중입니다!%n%n안전하게 제거하려면 실행 중인 응용 프로그램을 닫아야 합니다.%n지금 StreamForge를 종료하시겠습니까?%n%n• [예 (Yes)] 클릭: 앱을 종료하고 제거를 계속합니다%n• [아니요 (No)] 클릭: 제거를 취소합니다 (파일이 삭제되지 않습니다)
 korean.UninstallAbortedByUser=제거가 취소되었습니다. StreamForge는 그대로 유지되며 파일이 삭제되지 않았습니다.
 korean.AppRunningSetupPrompt=StreamForge가 현재 실행 중입니다!%n%n파일을 업데이트하거나 설치하려면 실행 중인 앱을 닫아야 합니다.%n지금 StreamForge를 종료하시겠습니까?%n%n• [예 (Yes)] 클릭: 앱을 종료하고 설치를 계속합니다%n• [아니요 (No)] 클릭: 설치를 취소합니다
+korean.UpgradePrompt=컴퓨터에 이전 버전의 StreamForge (v%1)가 설치되어 있습니다!%n%n최신 버전 (v%2)으로 즉시 업그레이드합니다.%n설치 경로: %3%n(사용자 설정 및 다운로드 파일은 유지됩니다)%n%n지금 업그레이드하시겠습니까?%n%n• [예 (Yes)] 클릭: v%2(으)로 업그레이드%n• [아니요 (No)] 클릭: 취소하고 종료
+korean.UpgradeFinished=StreamForge가 최신 버전 (v{#MyAppVersion})으로 성공적으로 업그레이드되었습니다!
 
 spanish.CreateDesktopIcon=Crear un acceso directo en el escritorio (&Create desktop shortcut)
 spanish.LaunchProgram=Iniciar StreamForge ahora
@@ -157,6 +167,8 @@ spanish.RepairFinished=¡Los archivos de StreamForge se han reparado y restaurad
 spanish.AppRunningUninstallPrompt=¡StreamForge se está ejecutando actualmente!%n%nPara desinstalar de forma segura, se debe cerrar la aplicación en ejecución.%n¿Desea cerrar StreamForge ahora?%n%n• Haga clic en [Sí]: Cerrar la aplicación y continuar con la desinstalación%n• Haga clic en [No]: Cancelar la desinstalación (no se eliminará ningún archivo)
 spanish.UninstallAbortedByUser=Desinstalación cancelada. StreamForge permanece intacto y no se eliminaron archivos.
 spanish.AppRunningSetupPrompt=¡StreamForge se está ejecutando actualmente!%n%nEl instalador necesita cerrar la aplicación para actualizar o instalar archivos.%n¿Desea cerrar StreamForge ahora?%n%n• Haga clic en [Sí]: Cerrar la aplicación y continuar con la instalación%n• Haga clic en [No]: Cancelar la instalación
+spanish.UpgradePrompt=¡Se ha detectado una versión anterior de StreamForge (v%1) en el equipo!%n%nEste instalador actualizará directamente a la última versión (v%2).%nRuta de instalación: %3%n(Su configuración y archivos descargados se conservarán)%n%n¿Desea actualizar ahora?%n%n• Haga clic en [Sí]: Actualizar a v%2%n• Haga clic en [No]: Cancelar y salir
+spanish.UpgradeFinished=¡StreamForge se ha actualizado correctamente a la última versión (v{#MyAppVersion})!
 
 french.CreateDesktopIcon=Créer un raccourci sur le Bureau (&Create desktop shortcut)
 french.LaunchProgram=Lancer StreamForge maintenant
@@ -173,6 +185,8 @@ french.RepairFinished=Les fichiers du programme StreamForge ont été réparés 
 french.AppRunningUninstallPrompt=StreamForge est actuellement en cours d'exécution !%n%nPour désinstaller en toute sécurité, l'application doit être fermée.%nVoulez-vous fermer StreamForge maintenant ?%n%n• Cliquez sur [Oui] : Fermer l'application et poursuivre la désinstallation%n• Cliquez sur [Non] : Annuler la désinstallation (aucun fichier ne sera supprimé)
 french.UninstallAbortedByUser=Désinstallation annulée. StreamForge reste intact et aucun fichier n'a été supprimé.
 french.AppRunningSetupPrompt=StreamForge est actuellement en cours d'exécution !%n%nL'assistant d'installation doit fermer l'application pour mettre à jour ou installer des fichiers.%nVoulez-vous fermer StreamForge maintenant ?%n%n• Cliquez sur [Oui] : Fermer l'application et continuer l'installation%n• Cliquez sur [Non] : Annuler l'installation
+french.UpgradePrompt=Une version antérieure de StreamForge (v%1) a été détectée sur votre ordinateur !%n%nCet assistant va mettre à niveau vers la dernière version (v%2).%nEmplacement d'installation : %3%n(Vos paramètres et fichiers téléchargés seront conservés)%n%nSouhaitez-vous effectuer la mise à niveau maintenant ?%n%n• Cliquez sur [Oui] : Mettre à niveau vers v%2%n• Cliquez sur [Non] : Annuler et quitter
+french.UpgradeFinished=StreamForge a été mis à niveau avec succès vers la dernière version (v{#MyAppVersion}) !
 
 german.CreateDesktopIcon=Desktop-Verknüpfung erstellen (&Create desktop shortcut)
 german.LaunchProgram=StreamForge jetzt starten
@@ -189,6 +203,8 @@ german.RepairFinished=StreamForge-Programmdateien wurden erfolgreich repariert u
 german.AppRunningUninstallPrompt=StreamForge wird derzeit ausgeführt!%n%nUm sicher zu deinstallieren, muss die ausgeführte Anwendung geschlossen werden.%nMöchten Sie StreamForge jetzt beenden?%n%n• Klicken Sie auf [Ja]: Anwendung beenden und mit der Deinstallation fortfahren%n• Klicken Sie auf [Nein]: Deinstallation abbrechen (es werden keine Dateien gelöscht)
 german.UninstallAbortedByUser=Deinstallation abgebrochen. StreamForge bleibt unverändert und es wurden keine Dateien gelöscht.
 german.AppRunningSetupPrompt=StreamForge wird derzeit ausgeführt!%n%nDas Setup muss die laufende Anwendung schließen, um Dateien zu aktualisieren oder zu installieren.%nMöchten Sie StreamForge jetzt beenden?%n%n• Klicken Sie auf [Ja]: Anwendung beenden und mit dem Setup fortfahren%n• Klicken Sie auf [Nein]: Setup abbrechen
+german.UpgradePrompt=Es wurde eine frühere Version von StreamForge (v%1) auf Ihrem Computer erkannt!%n%nDieses Setup wird Sie direkt auf die neueste Version (v%2) aktualisieren.%nInstallationspfad: %3%n(Ihre Einstellungen und heruntergeladenen Dateien bleiben erhalten)%n%nMöchten Sie jetzt aktualisieren?%n%n• Klicken Sie auf [Ja]: Auf v%2 aktualisieren%n• Klicken Sie auf [Nein]: Abbrechen und beenden
+german.UpgradeFinished=StreamForge wurde erfolgreich auf die neueste Version (v{#MyAppVersion}) aktualisiert!
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -294,11 +310,61 @@ end;
 var
   MaintenancePage: TInputOptionWizardPage;
   IsAlreadyInstalled: Boolean;
+  IsUpgradeMode: Boolean;
   IsRepairMode: Boolean;
   IsReinstallMode: Boolean;
   ExistingInstallDir: string;
   ExistingUninstallExe: string;
   InstalledVersion: string;
+
+function ParseVersionPart(var S: string): Integer;
+var
+  DotPos: Integer;
+  PartStr: string;
+begin
+  DotPos := Pos('.', S);
+  if DotPos > 0 then
+  begin
+    PartStr := Copy(S, 1, DotPos - 1);
+    S := Copy(S, DotPos + 1, Length(S));
+  end
+  else
+  begin
+    PartStr := S;
+    S := '';
+  end;
+  Result := StrToIntDef(PartStr, 0);
+end;
+
+function CompareVersion(V1, V2: string): Integer;
+var
+  Num1, Num2: Integer;
+  CleanV1, CleanV2: string;
+begin
+  Result := 0;
+  CleanV1 := V1;
+  CleanV2 := V2;
+  if (Length(CleanV1) > 0) and ((CleanV1[1] = 'v') or (CleanV1[1] = 'V')) then
+    CleanV1 := Copy(CleanV1, 2, Length(CleanV1));
+  if (Length(CleanV2) > 0) and ((CleanV2[1] = 'v') or (CleanV2[1] = 'V')) then
+    CleanV2 := Copy(CleanV2, 2, Length(CleanV2));
+
+  while (CleanV1 <> '') or (CleanV2 <> '') do
+  begin
+    Num1 := ParseVersionPart(CleanV1);
+    Num2 := ParseVersionPart(CleanV2);
+    if Num1 < Num2 then
+    begin
+      Result := -1;
+      Exit;
+    end
+    else if Num1 > Num2 then
+    begin
+      Result := 1;
+      Exit;
+    end;
+  end;
+end;
 
 function DetectExistingInstallation(): Boolean;
 var
@@ -378,59 +444,80 @@ end;
 procedure InitializeWizard();
 var
   PromptMsg: string;
+  VerComp: Integer;
 begin
   IsRepairMode := False;
   IsReinstallMode := False;
+  IsUpgradeMode := False;
   IsAlreadyInstalled := DetectExistingInstallation();
 
   if IsAlreadyInstalled then
   begin
     if InstalledVersion = '' then
-      InstalledVersion := '{#MyAppVersion}';
+      InstalledVersion := '1.0.0';
 
-    PromptMsg :=
-      '偵測到您的電腦中已安裝 StreamForge (版本: ' + InstalledVersion + ')！'#13#10#13#10 +
-      '安裝路徑：' + ExistingInstallDir + #13#10#13#10 +
-      '請問您是否要重新安裝 StreamForge？'#13#10#13#10 +
-      '• 點選【是 (Yes)】：進入安裝精靈進行重新安裝或維護'#13#10 +
-      '• 點選【否 (No)】：取消並退出安裝精靈';
+    VerComp := CompareVersion(InstalledVersion, '{#MyAppVersion}');
 
-    case ActiveLanguage of
-      'english':
-        PromptMsg :=
-          'StreamForge (v' + InstalledVersion + ') is already installed on your system!'#13#10#13#10 +
-          'Install Location: ' + ExistingInstallDir + #13#10#13#10 +
-          'Would you like to reinstall StreamForge?'#13#10#13#10 +
-          '• Click [Yes]: Proceed with reinstallation or maintenance'#13#10 +
-          '• Click [No]: Cancel and exit setup';
-      'chinesesimplified':
-        PromptMsg :=
-          '检测到您的计算机中已安装 StreamForge (版本: ' + InstalledVersion + ')！'#13#10#13#10 +
-          '安装路径：' + ExistingInstallDir + #13#10#13#10 +
-          '您是否要重新安装 StreamForge？'#13#10#13#10 +
-          '• 点击【是 (Yes)】：进入安装向导进行重新安装或维护'#13#10 +
-          '• 点击【否 (No)】：取消并退出安装向导';
-      'japanese':
-        PromptMsg :=
-          'コンピューターに StreamForge (v' + InstalledVersion + ') が既にインストールされています！'#13#10#13#10 +
-          'インストール先：' + ExistingInstallDir + #13#10#13#10 +
-          'StreamForge を再インストールしますか？'#13#10#13#10 +
-          '• [はい (Yes)]：再インストールまたはメンテナンスを続行'#13#10 +
-          '• [いいえ (No)]：インストールをキャンセルして終了';
-      'korean':
-        PromptMsg :=
-          '컴퓨터에 StreamForge (v' + InstalledVersion + ')가 이미 설치되어 있습니다!'#13#10#13#10 +
-          '설치 경로: ' + ExistingInstallDir + #13#10#13#10 +
-          'StreamForge를 재설치하시겠습니까?'#13#10#13#10 +
-          '• [예 (Yes)]: 재설치 또는 유지 관리 진행'#13#10 +
-          '• [아니오 (No)]: 설치를 취소하고 종료';
-    end;
-
-    if not WizardSilent then
+    if VerComp < 0 then
     begin
-      if MsgBox(PromptMsg, mbConfirmation, MB_YESNO) = IDNO then
+      // 升級更新模式 (Upgrade Mode)
+      IsUpgradeMode := True;
+      PromptMsg := FmtMessage(CustomMessage('UpgradePrompt'), [InstalledVersion, '{#MyAppVersion}', ExistingInstallDir]);
+      if not WizardSilent then
       begin
-        ExitProcess(0);
+        if MsgBox(PromptMsg, mbConfirmation, MB_YESNO) = IDNO then
+        begin
+          ExitProcess(0);
+        end;
+      end;
+    end
+    else
+    begin
+      // 相同版本或較新版本：詢問是否重新安裝或維護
+      PromptMsg :=
+        '偵測到您的電腦中已安裝 StreamForge (版本: ' + InstalledVersion + ')！'#13#10#13#10 +
+        '安裝路徑：' + ExistingInstallDir + #13#10#13#10 +
+        '請問您是否要重新安裝 StreamForge？'#13#10#13#10 +
+        '• 點選【是 (Yes)】：進入安裝精靈進行重新安裝或維護'#13#10 +
+        '• 點選【否 (No)】：取消並退出安裝精靈';
+
+      case ActiveLanguage of
+        'english':
+          PromptMsg :=
+            'StreamForge (v' + InstalledVersion + ') is already installed on your system!'#13#10#13#10 +
+            'Install Location: ' + ExistingInstallDir + #13#10#13#10 +
+            'Would you like to reinstall StreamForge?'#13#10#13#10 +
+            '• Click [Yes]: Proceed with reinstallation or maintenance'#13#10 +
+            '• Click [No]: Cancel and exit setup';
+        'chinesesimplified':
+          PromptMsg :=
+            '检测到您的计算机中已安装 StreamForge (版本: ' + InstalledVersion + ')！'#13#10#13#10 +
+            '安装路径：' + ExistingInstallDir + #13#10#13#10 +
+            '您是否要重新安装 StreamForge？'#13#10#13#10 +
+            '• 点击【是 (Yes)】：进入安装向导进行重新安装或维护'#13#10 +
+            '• 点击【否 (No)】：取消并退出安装向导';
+        'japanese':
+          PromptMsg :=
+            'コンピューターに StreamForge (v' + InstalledVersion + ') が既にインストールされています！'#13#10#13#10 +
+            'インストール先：' + ExistingInstallDir + #13#10#13#10 +
+            'StreamForge を再インストールしますか？'#13#10#13#10 +
+            '• [はい (Yes)]：再インストールまたはメンテナンスを続行'#13#10 +
+            '• [いいえ (No)]：インストールをキャンセルして終了';
+        'korean':
+          PromptMsg :=
+            '컴퓨터에 StreamForge (v' + InstalledVersion + ')가 이미 설치되어 있습니다!'#13#10#13#10 +
+            '설치 경로: ' + ExistingInstallDir + #13#10#13#10 +
+            'StreamForge를 재설치하시겠습니까?'#13#10#13#10 +
+            '• [예 (Yes)]: 재설치 또는 유지 관리 진행'#13#10 +
+            '• [아니오 (No)]: 설치를 취소하고 종료';
+      end;
+
+      if not WizardSilent then
+      begin
+        if MsgBox(PromptMsg, mbConfirmation, MB_YESNO) = IDNO then
+        begin
+          ExitProcess(0);
+        end;
       end;
     end;
 
@@ -458,7 +545,7 @@ begin
 
   if PageID = MaintenancePage.ID then
   begin
-    if not IsAlreadyInstalled then
+    if (not IsAlreadyInstalled) or IsUpgradeMode then
       Result := True;
     Exit;
   end;
@@ -536,8 +623,8 @@ begin
     ConfigDir := ExpandConstant('{userappdata}\StreamForge');
     ConfigPath := ConfigDir + '\config.json';
     
-    // In repair mode, preserve existing config if present
-    if not (IsRepairMode and FileExists(ConfigPath)) then
+    // In repair or upgrade mode, preserve existing config if present
+    if not ((IsRepairMode or IsUpgradeMode) and FileExists(ConfigPath)) then
     begin
       if WizardIsTaskSelected('autoupdate') then
         AutoUpdateVal := 'true'
@@ -572,6 +659,10 @@ begin
     if IsRepairMode then
     begin
       MsgBox(CustomMessage('RepairFinished'), mbInformation, MB_OK);
+    end
+    else if IsUpgradeMode then
+    begin
+      MsgBox(CustomMessage('UpgradeFinished'), mbInformation, MB_OK);
     end;
   end;
 end;
