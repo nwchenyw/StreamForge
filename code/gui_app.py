@@ -2974,6 +2974,11 @@ class MediaDownloaderApp(ctk.CTk):
                         song['status'] = 'converting'
                         self.after(0, lambda s=song: self._update_song_status(s, "🔄 轉檔中...", "#38bdf8") if not self.is_paused else None)
 
+            def _log_adapter(msg):
+                self.log(msg)
+                if "防 403 自動重試" in msg and not self.is_paused and not self.cancel_requested:
+                    self.after(0, lambda s=song: self._update_song_status(s, "🔄 403避讓重試中...", "#f97316"))
+
             try:
                 media_path = downloader.download_media(
                     url=song['url'],
@@ -2986,7 +2991,7 @@ class MediaDownloaderApp(ctk.CTk):
                     number_prefix=None,
                     custom_filename=target_stem,
                     overwrite=overwrite_flag,
-                    log_callback=self.log,
+                    log_callback=_log_adapter,
                     cancel_check=lambda: self.cancel_requested or self.current_download_session != session_id,
                     pause_check=lambda: not self.pause_event.is_set()
                 )

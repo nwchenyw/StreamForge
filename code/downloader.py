@@ -601,10 +601,12 @@ def download_media(
             'postprocessors': postprocessors,
             'writethumbnail': embed_thumbnail and fmt in ('mp3', 'm4a', 'flac', 'ogg'),
             'overwrites': overwrite,
-            'retries': 3,
-            'fragment_retries': 5,
-            'file_access_retries': 3,
-            'socket_timeout': 10,
+            'retries': 10,
+            'fragment_retries': 10,
+            'file_access_retries': 5,
+            'extractor_retries': 5,
+            'http_chunk_size': 10485760,
+            'socket_timeout': 15,
             'geo_bypass': True,
             'postprocessor_args': ffmpeg_multithread_args,
             'no_warnings': True,
@@ -634,10 +636,12 @@ def download_media(
             'merge_output_format': merge_fmt,
             'postprocessors': postprocessors,
             'overwrites': overwrite,
-            'retries': 3,
-            'fragment_retries': 5,
-            'file_access_retries': 3,
-            'socket_timeout': 10,
+            'retries': 10,
+            'fragment_retries': 10,
+            'file_access_retries': 5,
+            'extractor_retries': 5,
+            'http_chunk_size': 10485760,
+            'socket_timeout': 15,
             'geo_bypass': True,
             'postprocessor_args': ffmpeg_multithread_args,
             'no_warnings': True,
@@ -695,47 +699,80 @@ def download_media(
     ydl_opts['progress_hooks'] = [_internal_hook]
     ydl_opts['postprocessor_hooks'] = [_pp_hook]
 
+    max_retries = 3
     stem_for_cleanup = custom_filename if custom_filename else ""
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            if cancel_check and cancel_check():
-                raise DownloadCancelled("下載已被使用者取消")
-                
-            info = ydl.extract_info(url, download=True)
-            title = info.get('title', 'media')
-            safe_title = sanitize_filename(title)
+    for attempt in range(1, max_retries + 1):
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                if cancel_check and cancel_check():
+                    raise DownloadCancelled("下載已被使用者取消")
+                    
+                info = ydl.extract_info(url, download=True)
+                title = info.get('title', 'media')
+                safe_title = sanitize_filename(title)
 
-            if custom_filename:
-                expected_filename = f"{custom_filename}{target_ext}"
-                stem_for_cleanup = custom_filename
-            else:
-                expected_filename = f"{prefix_str}{safe_title}{target_ext}"
-                stem_for_cleanup = f"{prefix_str}{safe_title}"
-                
-            expected_path = os.path.join(output_dir, expected_filename)
-            final_path = None
-            if os.path.exists(expected_path):
-                final_path = expected_path
-            else:
-                candidates = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(target_ext)]
-                if candidates:
-                    candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-                    final_path = candidates[0]
+                if custom_filename:
+                    expected_filename = f"{custom_filename}{target_ext}"
+                    stem_for_cleanup = custom_filename
                 else:
+                    expected_filename = f"{prefix_str}{safe_title}{target_ext}"
+                    stem_for_cleanup = f"{prefix_str}{safe_title}"
+                    
+                expected_path = os.path.join(output_dir, expected_filename)
+                final_path = None
+                if os.path.exists(expected_path):
                     final_path = expected_path
+                else:
+                    candidates = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(target_ext)]
+                    if candidates:
+                        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                        final_path = candidates[0]
+                    else:
+                        final_path = expected_path
 
-            # 成功下載後清理孤立的縮圖檔 (.webp / .jpg / .png)，維持音樂資料夾乾淨
+                # 成功下載後清理孤立的縮圖檔 (.webp / .jpg / .png)，維持音樂資料夾乾淨
+                if stem_for_cleanup:
+                    cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=False)
+
+                return final_path
+
+        except DownloadCancelled:
             if stem_for_cleanup:
-                cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=False)
+                cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=True)
+            raise
 
-            return final_path
+        except Exception as ex:
+            if cancel_check and cancel_check():
+                if stem_for_cleanup:
+                    cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=True)
+                raise DownloadCancelled("下載已被使用者取消")
 
-    except (DownloadCancelled, Exception) as ex:
-        # 下載中斷或失敗時，徹底清理遺留的 .webp 縮圖檔、.part 暫存檔與 0 位元損毀檔
-        if stem_for_cleanup:
-            cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=True)
-        raise
+            err_str = str(ex)
+            # 判斷是否為 YouTube 403 Forbidden、串流被阻擋或暫時性網路中斷
+            is_403_or_throttle = any(k in err_str for k in ("403", "Forbidden", "HTTP Error 403", "unable to download video data", "Connection reset", "IncompleteRead"))
+
+            if is_403_or_throttle and attempt < max_retries:
+                if log_callback:
+                    log_callback(f"⚠️ [防 403 自動重試] 偵測到 YouTube 暫時性串流節流 (HTTP 403)，正在冷卻並自動重試 (第 {attempt}/{max_retries} 次)...")
+                
+                # 清理本輪失敗的暫存檔案
+                if stem_for_cleanup:
+                    cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=True)
+                
+                # 冷卻退避等候 (1.5s, 3.0s...)
+                wait_time = 1.5 * attempt
+                start_w = time.time()
+                while time.time() - start_w < wait_time:
+                    if cancel_check and cancel_check():
+                        raise DownloadCancelled("下載已被使用者取消")
+                    time.sleep(0.1)
+                continue
+            else:
+                # 已達重試上限或非可重試錯誤
+                if stem_for_cleanup:
+                    cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=True)
+                raise
 
 # 向後相容別名
 download_audio_to_mp3 = download_media
