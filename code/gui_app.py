@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import uuid
 import json
 import urllib.request
 import webbrowser
@@ -2775,80 +2776,85 @@ class MediaDownloaderApp(ctk.CTk):
         self.start_download_batch()
 
     def start_download_batch(self):
-        if self.is_running:
-            return
+        try:
+            if self.is_running:
+                return
 
-        selected_songs = [s for s in self.songs if s['var'].get()]
-        if not selected_songs:
-            messagebox.showwarning("提示", "清單中沒有勾選任何歌曲！請先加入歌曲並勾選。")
-            return
+            selected_songs = [s for s in self.songs if s['var'].get()]
+            if not selected_songs:
+                messagebox.showwarning("提示", "清單中沒有勾選任何歌曲！請先加入歌曲並勾選。")
+                return
 
-        output_dir = self.entry_dir.get().strip()
-        if not output_dir:
-            messagebox.showwarning("提示", "請指定下載儲存目錄！")
-            return
+            output_dir = self.entry_dir.get().strip()
+            if not output_dir:
+                messagebox.showwarning("提示", "請指定下載儲存目錄！")
+                return
 
-        # 下載前確保檢查資料夾編號格式
-        use_numbering = bool(self.chk_numbering.get())
-        if use_numbering:
-            check_res = downloader.check_folder_numbering(output_dir)
-            if check_res['status'] == 'not_numbered':
-                self.inspect_folder_format(user_triggered=False)
-                use_numbering = bool(self.chk_numbering.get())
-            elif check_res['status'] == 'already_numbered':
-                self.next_number = check_res['next_number']
+            # 下載前確保檢查資料夾編號格式
+            use_numbering = bool(self.chk_numbering.get())
+            if use_numbering:
+                check_res = downloader.check_folder_numbering(output_dir)
+                if check_res['status'] == 'not_numbered':
+                    self.inspect_folder_format(user_triggered=False)
+                    use_numbering = bool(self.chk_numbering.get())
+                elif check_res['status'] == 'already_numbered':
+                    self.next_number = check_res['next_number']
 
-        fmt_choice = self.opt_format.get()
-        format_type = extract_format_code(fmt_choice)
+            fmt_choice = self.opt_format.get()
+            format_type = extract_format_code(fmt_choice)
 
-        q_raw = self.opt_quality.get()
-        if format_type in downloader.VIDEO_FORMATS:
-            if "2160" in q_raw or "4k" in q_raw.lower():
-                quality = "2160"
-            elif "1440" in q_raw or "2k" in q_raw.lower():
-                quality = "1440"
-            elif "1080" in q_raw:
-                quality = "1080"
-            elif "720" in q_raw:
-                quality = "720"
-            elif "480" in q_raw:
-                quality = "480"
-            elif "360" in q_raw:
-                quality = "360"
+            q_raw = self.opt_quality.get()
+            if format_type in downloader.VIDEO_FORMATS:
+                if "2160" in q_raw or "4k" in q_raw.lower():
+                    quality = "2160"
+                elif "1440" in q_raw or "2k" in q_raw.lower():
+                    quality = "1440"
+                elif "1080" in q_raw:
+                    quality = "1080"
+                elif "720" in q_raw:
+                    quality = "720"
+                elif "480" in q_raw:
+                    quality = "480"
+                elif "360" in q_raw:
+                    quality = "360"
+                else:
+                    quality = "best"
+            elif format_type in ('wav', 'flac'):
+                quality = "lossless"
             else:
-                quality = "best"
-        elif format_type in ('wav', 'flac'):
-            quality = "lossless"
-        else:
-            quality = q_raw.split()[0]
+                quality = q_raw.split()[0]
 
-        embed_thumb = bool(self.chk_thumb.get()) and (format_type in ('mp3', 'm4a', 'flac', 'ogg'))
-        embed_meta = bool(self.chk_meta.get())
-        start_num = self.next_number if use_numbering else None
+            embed_thumb = bool(self.chk_thumb.get()) and (format_type in ('mp3', 'm4a', 'flac', 'ogg'))
+            embed_meta = bool(self.chk_meta.get())
+            start_num = self.next_number if use_numbering else None
 
-        session_id = uuid.uuid4().hex
-        self.current_download_session = session_id
-        self.is_running = True
-        self.is_paused = False
-        self.cancel_requested = False
-        self.pause_event.set()
-        self.duplicate_action_all = None
-        self.failed_items = []
+            session_id = uuid.uuid4().hex
+            self.current_download_session = session_id
+            self.is_running = True
+            self.is_paused = False
+            self.cancel_requested = False
+            self.pause_event.set()
+            self.duplicate_action_all = None
+            self.failed_items = []
 
-        # 切換三顆常駐按鈕狀態（主按鈕鎖定，暫停與停止亮起）
-        self.btn_download.configure(state="disabled", fg_color="#1e293b", text="⚡ 下載任務進行中...")
-        self.btn_pause.configure(state="normal", fg_color="#f59e0b", text=i18n.t("btn_pause"))
-        self.btn_cancel.configure(state="normal", fg_color="#ef4444", text=i18n.t("btn_cancel"))
-        self.btn_add.configure(state="disabled")
+            # 切換三顆常駐按鈕狀態（主按鈕鎖定，暫停與停止亮起）
+            self.btn_download.configure(state="disabled", fg_color="#1e293b", text="⚡ 下載任務進行中...")
+            self.btn_pause.configure(state="normal", fg_color="#f59e0b", text=i18n.t("btn_pause"))
+            self.btn_cancel.configure(state="normal", fg_color="#ef4444", text=i18n.t("btn_cancel"))
+            self.btn_add.configure(state="disabled")
 
-        max_workers = self.get_selected_thread_count()
-        self.log(f"🎬 開始批次下載任務：共 {len(selected_songs)} 首，格式: {format_type.upper()}，音質/畫質: {quality}，併發線程: {max_workers}")
+            max_workers = self.get_selected_thread_count()
+            self.log(f"🎬 開始批次下載任務：共 {len(selected_songs)} 首，格式: {format_type.upper()}，音質/畫質: {quality}，併發線程: {max_workers}")
 
-        threading.Thread(
-            target=self._worker_download,
-            args=(selected_songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers, session_id),
-            daemon=True
-        ).start()
+            threading.Thread(
+                target=self._worker_download,
+                args=(selected_songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers, session_id),
+                daemon=True
+            ).start()
+        except Exception as ex:
+            self.is_running = False
+            self.log(f"❌ 啟動下載任務時發生異常: {ex}")
+            messagebox.showerror("啟動下載失敗", f"啟動下載時發生錯誤：\n{str(ex)}")
 
     def _worker_download(self, songs, output_dir, format_type, quality, embed_thumb, embed_meta, start_num, max_workers=3, session_id=None):
         total = len(songs)
