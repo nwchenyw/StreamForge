@@ -43,12 +43,85 @@ def natural_sort_key(s: str):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
 def clean_media_title(filename: str) -> Tuple[str, str]:
-    """分離出不帶既有編號前綴的純檔名與副檔名"""
-    stem, ext = os.path.splitext(filename)
-    m = NUMBER_PATTERN.match(stem)
-    if m:
-        return m.group(2).strip(), ext
-    return stem.strip(), ext
+    """
+    分離出不帶既有編號前綴與重複後綴的純檔名與副檔名
+    支援清理多重累贅前綴 (如 "001 - 002 - ", "01. ", "[01] ", "(01) ")
+    以及重複後綴 (如 " (1) (1)")，且不會誤切無副檔名標題中的點號。
+    """
+    name = filename.strip()
+    ext = ''
+    for cand_ext in MEDIA_EXTENSIONS + ('.webp', '.jpg', '.jpeg', '.png'):
+        if name.lower().endswith(cand_ext):
+            ext = name[-len(cand_ext):]
+            name = name[:-len(cand_ext)].strip()
+            break
+
+    stem = name
+    prefix_regex = re.compile(r'^(?:\[\d{1,4}\]|\(\d{1,4}\)|\d{1,4}(?:[\s_\-\.]+|\s*-\s*))\s*')
+    while True:
+        m = prefix_regex.match(stem)
+        if m:
+            remaining = stem[m.end():].strip()
+            if remaining:
+                stem = remaining
+            else:
+                break
+        else:
+            break
+
+    suffix_regex = re.compile(r'(\s*\(\d+\))+$')
+    stem = suffix_regex.sub('', stem).strip()
+    return (stem if stem else name), ext
+
+def cleanup_temp_and_thumbnail_files(folder_path: str, stem: str, is_error: bool = False):
+    """
+    清理下載遺留的暫存檔與多餘的縮圖檔 (.webp, .jpg, .png, .part, .ytdl, .temp)
+    - 成功時：清除獨立的 .webp, .jpg, .png 縮圖檔（因為縮圖已內嵌進 MP3/M4A/FLAC 內）
+    - 失敗/取消時 (is_error=True)：同時清除 .webp, .jpg, .png, .part, .ytdl, .temp 及 0-byte 媒體檔
+    """
+    if not os.path.exists(folder_path) or not stem:
+        return
+
+    thumb_exts = ('.webp', '.jpg', '.jpeg', '.png')
+    temp_exts = ('.part', '.ytdl', '.temp', '.tmp')
+
+    try:
+        filenames = os.listdir(folder_path)
+    except Exception:
+        return
+
+    clean_stem_lower = stem.strip().lower()
+
+    for f in filenames:
+        f_lower = f.lower()
+        full_path = os.path.join(folder_path, f)
+
+        # 檢查是否屬於此歌曲之產物
+        f_stem, f_ext = os.path.splitext(f_lower)
+        is_matched = (f_stem == clean_stem_lower) or f_lower.startswith(clean_stem_lower)
+
+        if is_matched:
+            # 清除縮圖檔 (無論成功或失敗，都不應在資料夾留下零散的 .webp/.jpg)
+            if f_ext in thumb_exts:
+                try:
+                    os.remove(full_path)
+                except Exception:
+                    pass
+
+            # 暫存檔清除 (.part, .ytdl, .temp 等)
+            if any(f_lower.endswith(te) for te in temp_exts) or '.temp.' in f_lower:
+                try:
+                    os.remove(full_path)
+                except Exception:
+                    pass
+
+            # 若失敗或取消，刪除損毀或 0-byte 的檔案
+            if is_error:
+                try:
+                    if os.path.isfile(full_path) and os.path.getsize(full_path) == 0:
+                        os.remove(full_path)
+                except Exception:
+                    pass
 
 def find_existing_duplicate(folder_path: str, title: str, target_ext: str) -> Optional[Tuple[str, str]]:
     """
@@ -58,8 +131,9 @@ def find_existing_duplicate(folder_path: str, title: str, target_ext: str) -> Op
     if not os.path.exists(folder_path):
         return None
 
-    clean_target = sanitize_filename(title).strip().lower()
-    clean_target_no_dup = re.sub(r'\s*\(\d+\)$', '', clean_target).strip()
+    clean_target_stem, _ = clean_media_title(title)
+    clean_target = sanitize_filename(clean_target_stem).strip().lower()
+    clean_target_no_dup = re.sub(r'(\s*\(\d+\))+$', '', clean_target).strip()
 
     try:
         filenames = os.listdir(folder_path)
@@ -77,7 +151,7 @@ def find_existing_duplicate(folder_path: str, title: str, target_ext: str) -> Op
 
         clean_f, _ = clean_media_title(f)
         clean_f_lower = clean_f.strip().lower()
-        clean_f_no_dup = re.sub(r'\s*\(\d+\)$', '', clean_f_lower).strip()
+        clean_f_no_dup = re.sub(r'(\s*\(\d+\))+$', '', clean_f_lower).strip()
 
         # 比對名稱 (精準比對，或去除結尾 (1) 後比對)
         if clean_f_lower == clean_target or clean_f_no_dup == clean_target_no_dup:
@@ -87,12 +161,13 @@ def find_existing_duplicate(folder_path: str, title: str, target_ext: str) -> Op
 
 def get_unique_suffix_stem(folder_path: str, prefix_str: str, safe_title: str, target_ext: str) -> Tuple[str, str]:
     """
-    產生加上 (1), (2)... 後綴的唯一檔名，避免覆蓋
+    產生加上 (1), (2)... 後綴的唯一檔名，避免覆蓋，且去除已存在的 (1) 後綴避免重複累加
     回傳 (產生的 stem 名稱, 完整路徑)
     """
+    clean_base, _ = clean_media_title(safe_title)
     counter = 1
     while True:
-        candidate_stem = f"{prefix_str}{safe_title} ({counter})"
+        candidate_stem = f"{prefix_str}{clean_base} ({counter})"
         candidate_filename = f"{candidate_stem}{target_ext}"
         candidate_path = os.path.join(folder_path, candidate_filename)
         if not os.path.exists(candidate_path):
@@ -620,29 +695,47 @@ def download_media(
     ydl_opts['progress_hooks'] = [_internal_hook]
     ydl_opts['postprocessor_hooks'] = [_pp_hook]
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        if cancel_check and cancel_check():
-            raise DownloadCancelled("下載已被使用者取消")
-            
-        info = ydl.extract_info(url, download=True)
-        title = info.get('title', 'media')
-        safe_title = sanitize_filename(title)
+    stem_for_cleanup = custom_filename if custom_filename else ""
 
-        if custom_filename:
-            expected_filename = f"{custom_filename}{target_ext}"
-        else:
-            expected_filename = f"{prefix_str}{safe_title}{target_ext}"
-            
-        expected_path = os.path.join(output_dir, expected_filename)
-        if os.path.exists(expected_path):
-            return expected_path
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            if cancel_check and cancel_check():
+                raise DownloadCancelled("下載已被使用者取消")
+                
+            info = ydl.extract_info(url, download=True)
+            title = info.get('title', 'media')
+            safe_title = sanitize_filename(title)
 
-        candidates = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(target_ext)]
-        if candidates:
-            candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-            return candidates[0]
+            if custom_filename:
+                expected_filename = f"{custom_filename}{target_ext}"
+                stem_for_cleanup = custom_filename
+            else:
+                expected_filename = f"{prefix_str}{safe_title}{target_ext}"
+                stem_for_cleanup = f"{prefix_str}{safe_title}"
+                
+            expected_path = os.path.join(output_dir, expected_filename)
+            final_path = None
+            if os.path.exists(expected_path):
+                final_path = expected_path
+            else:
+                candidates = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(target_ext)]
+                if candidates:
+                    candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                    final_path = candidates[0]
+                else:
+                    final_path = expected_path
 
-        return expected_path
+            # 成功下載後清理孤立的縮圖檔 (.webp / .jpg / .png)，維持音樂資料夾乾淨
+            if stem_for_cleanup:
+                cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=False)
+
+            return final_path
+
+    except (DownloadCancelled, Exception) as ex:
+        # 下載中斷或失敗時，徹底清理遺留的 .webp 縮圖檔、.part 暫存檔與 0 位元損毀檔
+        if stem_for_cleanup:
+            cleanup_temp_and_thumbnail_files(output_dir, stem_for_cleanup, is_error=True)
+        raise
 
 # 向後相容別名
 download_audio_to_mp3 = download_media

@@ -2891,8 +2891,15 @@ class MediaDownloaderApp(ctk.CTk):
                 return
 
             target_ext = f".{format_type}"
-            safe_title = downloader.sanitize_filename(song['title'])
             prefix_str = song.get('_prefix_str', '')
+
+            # 若啟用編號，先剔除標題中原有的編號前綴與重複後綴，避免檔名編碼無限累加 (例如 001 - 002 - Song)
+            if prefix_str:
+                clean_title, _ = downloader.clean_media_title(song['title'])
+            else:
+                clean_title = song['title']
+
+            safe_title = downloader.sanitize_filename(clean_title)
             custom_stem = None
             overwrite_flag = True
 
@@ -2900,7 +2907,7 @@ class MediaDownloaderApp(ctk.CTk):
             with self.duplicate_lock:
                 if self.cancel_requested or self.current_download_session != session_id:
                     return
-                dup = downloader.find_existing_duplicate(output_dir, song['title'], target_ext)
+                dup = downloader.find_existing_duplicate(output_dir, safe_title, target_ext)
                 if dup:
                     dup_filename, dup_path = dup
                     self.log(f"🔍 [查重發現] 資料夾已有相似檔案: {dup_filename}")
@@ -2930,8 +2937,19 @@ class MediaDownloaderApp(ctk.CTk):
                         self.log(f"🔁 [覆蓋] 覆蓋舊檔: {dup_filename}")
                         overwrite_flag = True
 
+            # 確定最終要儲存的主檔名 (stem)
+            if custom_stem:
+                target_stem = custom_stem
+            elif prefix_str:
+                target_stem = f"{prefix_str}{safe_title}"
+            else:
+                target_stem = safe_title
+
+            # 下載前先清理該 stem 可能遺留的殘留縮圖或暫存檔 (如先前失敗遺留的 .webp/.part)
+            downloader.cleanup_temp_and_thumbnail_files(output_dir, target_stem, is_error=True)
+
             # 4. 開始執行下載
-            display_name = f"{custom_stem}{target_ext}" if custom_stem else f"{prefix_str}{song['title']}"
+            display_name = f"{target_stem}{target_ext}"
             song['status'] = 'downloading'
             self.after(0, lambda s=song: self._update_song_status(s, "⚡ 下載中...", "#f59e0b"))
             self.log(f"📥 [{song_idx}/{total}] 啟動下載: {display_name}")
@@ -2965,8 +2983,8 @@ class MediaDownloaderApp(ctk.CTk):
                     embed_thumbnail=embed_thumb,
                     embed_metadata=embed_meta,
                     progress_hook=_song_hook,
-                    number_prefix=prefix_str if not custom_stem else None,
-                    custom_filename=custom_stem,
+                    number_prefix=None,
+                    custom_filename=target_stem,
                     overwrite=overwrite_flag,
                     log_callback=self.log,
                     cancel_check=lambda: self.cancel_requested or self.current_download_session != session_id,
@@ -2987,6 +3005,7 @@ class MediaDownloaderApp(ctk.CTk):
                 self.after(0, lambda s=song: self._update_song_status(s, "✅ 已完成", "#10b981"))
 
             except downloader.DownloadCancelled:
+                downloader.cleanup_temp_and_thumbnail_files(output_dir, target_stem, is_error=True)
                 with prog_lock:
                     completed_count += 1
                     pct = completed_count / total
@@ -2996,6 +3015,7 @@ class MediaDownloaderApp(ctk.CTk):
                 return
 
             except Exception as ex:
+                downloader.cleanup_temp_and_thumbnail_files(output_dir, target_stem, is_error=True)
                 if self.cancel_requested or self.current_download_session != session_id:
                     song['status'] = 'stopped'
                     self.after(0, lambda s=song: self._update_song_status(s, "⏹️ 已停止", "#64748b"))
