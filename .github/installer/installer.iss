@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "StreamForge"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "The StreamForge Team & Contributors"
 #define MyAppURL "https://github.com/nwchenyw/StreamForge"
 #define MyAppExeName "StreamForge.exe"
@@ -214,6 +214,12 @@ Type: filesandordirs; Name: "{app}\assets"
 Type: filesandordirs; Name: "{app}\downloads"
 Type: files; Name: "{app}\*.*"
 Type: dirifempty; Name: "{app}"
+
+[Registry]
+Root: HKA; Subkey: "Software\Classes\.sfpl"; ValueType: string; ValueName: ""; ValueData: "StreamForge.Playlist"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\StreamForge.Playlist"; ValueType: string; ValueName: ""; ValueData: "StreamForge Playlist File"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\StreamForge.Playlist\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\assets\app_icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\StreamForge.Playlist\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Code]
 procedure ExitProcess(uExitCode: Integer); external 'ExitProcess@kernel32.dll stdcall';

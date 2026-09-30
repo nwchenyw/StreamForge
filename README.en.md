@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # ⚡ StreamForge
 ### High-Performance Media Stream & Audio Processing Utility
@@ -15,7 +15,7 @@
   <a href="README.de.md"><b>Deutsch</b></a>
 </p>
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
@@ -88,7 +88,7 @@ You can control StreamForge completely via keyboard in the **`💻 Interactive T
 ## 🚀 Installation & Releases
 
 ### 1. Windows Native Installer (Recommended)
-Download the latest **`StreamForge-Setup-v1.0.0.exe`** from the [GitHub Releases](https://github.com/nwchenyw/StreamForge/releases) page:
+Download the latest **`StreamForge-Setup-v1.1.0.exe`** from the [GitHub Releases](https://github.com/nwchenyw/StreamForge/releases) page:
 - **8-Language Setup Wizard**: Defaults to Traditional Chinese, with instant selection for English and 6 other languages.
 - **Custom Destination**: Install to default Program Files, any secondary drive, or directly to a portable USB drive.
 - **Shortcut Configuration**: Optional Desktop and Start Menu shortcuts.
@@ -115,7 +115,7 @@ python -m PyInstaller --onedir --noconsole --name "StreamForge" --collect-all cu
 
 # Step 2: Compile Inno Setup installer
 iscc .github/installer/installer.iss
-# Output is saved to installer/StreamForge-Setup-v1.0.0.exe
+# Output is saved to installer/StreamForge-Setup-v1.1.0.exe
 ```
 
 ---

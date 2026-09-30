@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # ⚡ StreamForge
 ### 高性能流媒体影音工坊 · 跨格式转换与智能文件名管理工具
@@ -15,7 +15,7 @@
   <a href="README.de.md"><b>Deutsch</b></a>
 </p>
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
@@ -88,7 +88,7 @@
 ## 🚀 下载与安装 (Installation & Releases)
 
 ### 1. Windows 原生多语言安装包 (推荐)
-前往 [Releases 页面](https://github.com/nwchenyw/StreamForge/releases) 下载最新版的 **`StreamForge-Setup-v1.0.0.exe`**：
+前往 [Releases 页面](https://github.com/nwchenyw/StreamForge/releases) 下载最新版的 **`StreamForge-Setup-v1.1.0.exe`**：
 - **8 国语言安装向导**：启动安装程序时即可自选界面语言。
 - **自定义安装路径**：可自由安装于默认系统路径、任意硬盘目录或 U盘。
 - **快捷方式设置**：安装时可自选是否创建桌面与开始菜单快捷方式。
@@ -115,7 +115,7 @@ python -m PyInstaller --onedir --noconsole --name "StreamForge" --collect-all cu
 
 # 步骤 2: 编译 Inno Setup 多语言安装文件
 iscc .github/installer/installer.iss
-# 生成的安装文件位于 installer/StreamForge-Setup-v1.0.0.exe
+# 生成的安装文件位于 installer/StreamForge-Setup-v1.1.0.exe
 ```
 
 ---

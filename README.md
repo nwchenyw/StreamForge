@@ -15,14 +15,14 @@
   <a href="README.de.md"><b>Deutsch</b></a>
 </p>
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
 [![i18n](https://img.shields.io/badge/Languages-8%20Supported-purple?style=for-the-badge)](code/i18n.py)
 
 <p align="center">
-  <b>支援 8 國語言即時切換 · MP3 / MP4 切換 · 隨身碟智慧辨識 · 001 循序編號 · 目標目錄防覆蓋查重 · 失敗診斷與一鍵重試 · 內建交互式命令列 (CLI)</b>
+  <b>支援 8 國語言即時切換 · USB 動態熱插拔偵測 · 專屬 .sfpl 歌單匯出匯入 · 隨身碟智慧辨識 · 001 循序編號 · 目標目錄防覆蓋查重 · 失敗診斷與一鍵重試 · 內建交互式命令列 (CLI)</b>
 </p>
 
 </div>
@@ -31,6 +31,12 @@
 
 ## 🌟 核心特色 (Key Features)
 
+- 🔌 **USB 隨身碟動態即時熱插拔偵測 (Dynamic USB Hotplug Detection)**：
+  - 背景即時輪詢外接隨身碟狀態，插上隨身碟時自動顯示磁碟機代號、磁碟標籤與剩餘可用空間。
+  - 當儲存路徑所在的隨身碟被拔除時，系統主動告警並自動安全切換回預設下載路徑，徹底防止下載中斷寫入崩潰！
+- 📜 **專屬 `.sfpl` 歌單匯出與匯入 (StreamForge Playlist Specification)**：
+  - 專屬標準化歌單交換格式，完整記錄曲目名稱、網址、歌手、時長與選取狀態。
+  - 原生支援 Windows 檔案關聯（雙擊 `.sfpl` 自動啟動並載入歌單），並相容匯入 `.json`、`.m3u`、`.m3u8`、`.txt`。
 - 🌐 **多國語言介面 (預設繁體中文，支援全球 8 國語言)**：
   - 支援 **繁體中文（預設）、English、简体中文、日本語、한국어、Español、Français、Deutsch**。
   - **安裝精靈預設繁中**：啟動安裝檔時預設為繁體中文，亦可自由切換其他 7 國語言。
@@ -64,6 +70,8 @@
 | **`help`** | `?`, `h` | 顯示所有可用指令與說明 |
 | **`add <網址>`** | `a <網址>` | 新增單曲或播放清單網址至清單中（例如：`add https://...`） |
 | **`paste`** | `p` | 自動讀取系統剪貼簿中的網址並加入 |
+| **`export`** | `exp` | 匯出目前清單為 `.sfpl`、`.m3u8` 或 `.txt` 播放清單檔案 |
+| **`import [檔案]`** | `imp` | 匯入 `.sfpl`、`.json`、`.m3u` 或 `.txt` 播放清單 |
 | **`list`** | `ls` | 列出目前清單中所有歌曲、時長、勾選與下載狀態 |
 | **`select <範圍>`** | `sel` | 選取歌曲：`select all`、`select none`、`select 1 3 5`、`select 1-5` |
 | **`del <範圍>`** | `rm` | 刪除歌曲：`del 2`、`del 1 3`、`del all` |
@@ -74,8 +82,9 @@
 | **`retry`** | `r` | 重新嘗試下載所有標記為失敗的歌曲 |
 | **`format <格式>`** | `fmt` | 切換格式：`format mp3` 或 `format mp4` |
 | **`quality <值>`** | `q` | 設定品質：音質 `quality 320` 或畫質 `quality 1080`、`quality best` |
+| **`convert`** | `factory` | 開啟本地格式工廠 (批次媒體轉檔工具) |
 | **`dir [路徑]`** | `cd` | 查看或切換下載儲存路徑，例如：`dir D:\MyMusic` |
-| **`usb`** | - | 自動辨識插上的 USB 隨身碟並切換下載目錄 |
+| **`usb`** | - | 動態偵測插上的 USB 隨身碟並切換下載目錄 |
 | **`check`** | - | 檢查目標資料夾是否符合 001 編號格式 |
 | **`number <on/off>`**| `num` | 開啟或關閉檔名 001 前綴序號功能 |
 | **`open`** | - | 在檔案總管開啟當前下載儲存資料夾 |
@@ -88,7 +97,7 @@
 ## 🚀 下載與安裝 (Installation & Releases)
 
 ### 1. Windows 原生多國語言安裝精靈 (推薦)
-前往 [Releases 頁面](https://github.com/nwchenyw/StreamForge/releases) 下載最新版的 **`StreamForge-Setup-v1.0.0.exe`**：
+前往 [Releases 頁面](https://github.com/nwchenyw/StreamForge/releases) 下載最新版的 **`StreamForge-Setup-v1.1.0.exe`**：
 - **預設繁體中文**：啟動安裝時預設為繁體中文，亦可自選其他 7 國語言。
 - **自選安裝位置**：可自由安裝於預設系統路徑、任意硬碟目錄或隨身碟。
 - **捷徑設定**：安裝時可自由勾選是否建立桌面捷徑與開始功能表捷徑。
@@ -115,7 +124,7 @@ python -m PyInstaller --onedir --noconsole --name "StreamForge" --collect-all cu
 
 # 步驟 2: 編譯 Inno Setup 多語言安裝檔
 iscc .github/installer/installer.iss
-# 產出檔案位於 installer/StreamForge-Setup-v1.0.0.exe
+# 產出檔案位於 installer/StreamForge-Setup-v1.1.0.exe
 ```
 
 ---

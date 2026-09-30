@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # ⚡ StreamForge
 ### 고성능 스트리밍 미디어 스튜디오 · 포맷 변환 및 스마트 번호 매기기 도구
@@ -15,7 +15,7 @@
   <a href="README.de.md"><b>Deutsch</b></a>
 </p>
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
@@ -86,7 +86,7 @@
 ## 🚀 다운로드 및 설치 (Installation & Releases)
 
 ### 1. Windows 설치 프로그램 (권장)
-[Releases 페이지](https://github.com/nwchenyw/StreamForge/releases) 에서 최신 **`StreamForge-Setup-v1.0.0.exe`** 를 다운로드하세요:
+[Releases 페이지](https://github.com/nwchenyw/StreamForge/releases) 에서 최신 **`StreamForge-Setup-v1.1.0.exe`** 를 다운로드하세요:
 - **8개 국어 설치 마법사**: 시작 시 한국어를 선택하여 편리하게 설치 진행.
 - **자유로운 설치 경로**: 기본 경로 외 외장 하드나 USB 드라이브에도 직접 설치 가능.
 - **스크립트 없는 안전한 패키징**: Windows 제어판/설정에서 깔끔하게 원클릭 제거 가능.

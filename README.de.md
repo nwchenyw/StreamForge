@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # ⚡ StreamForge
 ### Leistungsstarkes Medien-Streaming Studio · Formatkonvertierung & Intelligente Dateinamenverwaltung
@@ -15,7 +15,7 @@
   <a href="README.de.md"><b>Deutsch</b></a>
 </p>
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
@@ -82,7 +82,7 @@ Steuern Sie StreamForge per Tastatur im Bereich **`💻 Interaktives Terminal`**
 ## 🚀 Installation & Downloads (Installation & Releases)
 
 ### 1. Windows Installer (Empfohlen)
-Laden Sie **`StreamForge-Setup-v1.0.0.exe`** von der [Releases-Seite](https://github.com/nwchenyw/StreamForge/releases) herunter:
+Laden Sie **`StreamForge-Setup-v1.1.0.exe`** von der [Releases-Seite](https://github.com/nwchenyw/StreamForge/releases) herunter:
 - Nativer Windows-Installationsassistent in 8 Sprachen.
 - Saubere Installation ohne Drittanbieter-Skripte mit vollwertigem Windows-Deinstallationsprogramm.
 

@@ -55,16 +55,20 @@ jobs:
       - name: Package Portable ZIP Archive
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/StreamForge" -DestinationPath "installer/StreamForge-v1.0.0-Portable.zip" -Force
+          $ver = "${{ github.ref_name }}".TrimStart("v")
+          if (-not $ver -or $ver -eq "main") { $ver = "1.1.0" }
+          Compress-Archive -Path "dist/StreamForge" -DestinationPath "installer/StreamForge-v${ver}-Portable.zip" -Force
 
       - name: Calculate SHA-256 Checksums
         shell: pwsh
         run: |
-          $setupHash = (Get-FileHash -Path "installer/StreamForge-Setup-v1.0.0.exe" -Algorithm SHA256).Hash
-          $zipHash = (Get-FileHash -Path "installer/StreamForge-v1.0.0-Portable.zip" -Algorithm SHA256).Hash
-          "$setupHash  StreamForge-Setup-v1.0.0.exe`n$zipHash  StreamForge-v1.0.0-Portable.zip" | Out-File -Encoding utf8 "installer/checksums-sha256.txt"
-          Write-Host "Installer SHA-256: $setupHash"
-          Write-Host "Portable SHA-256:  $zipHash"
+          $setupFile = Get-ChildItem -Path "installer" -Filter "StreamForge-Setup-*.exe" | Select-Object -First 1
+          $zipFile = Get-ChildItem -Path "installer" -Filter "StreamForge-*-Portable.zip" | Select-Object -First 1
+          $setupHash = (Get-FileHash -Path $setupFile.FullName -Algorithm SHA256).Hash
+          $zipHash = (Get-FileHash -Path $zipFile.FullName -Algorithm SHA256).Hash
+          "$setupHash  $($setupFile.Name)`n$zipHash  $($zipFile.Name)" | Out-File -Encoding utf8 "installer/checksums-sha256.txt"
+          Write-Host "Installer SHA-256: $setupHash ($($setupFile.Name))"
+          Write-Host "Portable SHA-256:  $zipHash ($($zipFile.Name))"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -72,8 +76,8 @@ jobs:
         with:
           name: StreamForge ${{ github.ref_name }}
           files: |
-            installer/StreamForge-Setup-v1.0.0.exe
-            installer/StreamForge-v1.0.0-Portable.zip
+            installer/StreamForge-Setup-*.exe
+            installer/StreamForge-*-Portable.zip
             installer/checksums-sha256.txt
           draft: false
           prerelease: false

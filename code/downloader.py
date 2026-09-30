@@ -174,22 +174,48 @@ def get_unique_suffix_stem(folder_path: str, prefix_str: str, safe_title: str, t
             return candidate_stem, candidate_path
         counter += 1
 
-def get_removable_drives() -> List[str]:
-    """獲取目前 Windows 連接的所有隨身碟 (USB Removable Drives)"""
+def get_removable_drives_detail() -> List[Dict]:
+    """
+    獲取目前 Windows 連接的所有隨身碟詳細資訊 (字母、路徑、磁碟標籤、可用空間 GB、總空間 GB)
+    """
     drives = []
     try:
-        import ctypes, string
+        import ctypes, string, shutil
         bitmask = ctypes.windll.kernel32.GetLogicalDrives()
         for letter in string.ascii_uppercase:
             if bitmask & 1:
                 drive_path = f"{letter}:\\"
                 # DRIVE_REMOVABLE == 2
                 if ctypes.windll.kernel32.GetDriveTypeW(drive_path) == 2:
-                    drives.append(drive_path)
+                    vol_name = ctypes.create_unicode_buffer(260)
+                    fs_name = ctypes.create_unicode_buffer(260)
+                    ctypes.windll.kernel32.GetVolumeInformationW(
+                        drive_path, vol_name, 260, None, None, None, fs_name, 260
+                    )
+                    free_gb, total_gb = 0.0, 0.0
+                    try:
+                        usage = shutil.disk_usage(drive_path)
+                        free_gb = round(usage.free / (1024**3), 1)
+                        total_gb = round(usage.total / (1024**3), 1)
+                    except Exception:
+                        pass
+                    label = vol_name.value.strip() or "隨身碟"
+                    drives.append({
+                        'letter': letter,
+                        'path': drive_path,
+                        'label': label,
+                        'filesystem': fs_name.value.strip() or "FAT32",
+                        'free_gb': free_gb,
+                        'total_gb': total_gb
+                    })
             bitmask >>= 1
     except Exception:
         pass
     return drives
+
+def get_removable_drives() -> List[str]:
+    """獲取目前 Windows 連接的所有隨身碟路徑代號列表 (相容舊呼叫)"""
+    return [d['path'] for d in get_removable_drives_detail()]
 
 def check_folder_numbering(folder_path: str) -> Dict:
     """

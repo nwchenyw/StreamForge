@@ -16,6 +16,7 @@ import customtkinter as ctk
 from PIL import Image
 import downloader
 import i18n
+import playlist
 
 # 設定外觀模式與主題
 ctk.set_appearance_mode("dark")
@@ -98,7 +99,7 @@ def get_windows_user_downloads_dir() -> str:
     return os.path.expanduser("~")
 
 # ================= 設定檔與更新檢查 =================
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 GITHUB_REPO = "nwchenyw/StreamForge"
 GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
@@ -1144,7 +1145,7 @@ class MediaDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("StreamForge v1.0.0 · 串流影音工坊 (多格式下載 / 本地轉檔 · 命令終端版)")
+        self.title("StreamForge v1.1.0 · 串流影音工坊 (多格式下載 / 本地轉檔 · 命令終端版)")
         self.geometry("1060 x 870")
         self.minsize(920, 720)
         apply_window_icon(self)
@@ -1184,6 +1185,7 @@ class MediaDownloaderApp(ctk.CTk):
         self.next_number = 1  # 接續編號起點
         self.duplicate_action_all = None  # 批次內套用全部的重複處理選項
         self.failed_items = []  # 失敗歌曲資訊
+        self._connected_usb_drives = {}  # 記錄當前連接之 USB 隨身碟詳細資訊
         self.console_visible = True
         self.cmd_history = []
         self.cmd_history_idx = -1
@@ -1201,9 +1203,16 @@ class MediaDownloaderApp(ctk.CTk):
         self.chk_thumb = None
 
         self._build_ui()
-        self._detect_usb_drives()
-        self.log("🚀 StreamForge v1.0.0 就緒！© 2026 The StreamForge Team. All Rights Reserved.")
+        # 啟動 USB 隨身碟動態背景輪詢（隨插即用偵測）
+        self.after(500, self._poll_usb_drives)
+        self.log("🚀 StreamForge v1.1.0 就緒！© 2026 The StreamForge Team. All Rights Reserved.")
         self.log("💡 可在下方輸入指令（輸入 'help' 查看所有可用指令），支援 ↑/↓ 鍵歷史紀錄。")
+
+        # 支援 Windows 檔案關聯與命令列直接載入歌單 (*.sfpl, *.json, *.m3u, *.txt)
+        if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
+            cli_file = sys.argv[1]
+            if cli_file.lower().endswith(('.sfpl', '.json', '.m3u', '.m3u8', '.txt')):
+                self.after(600, lambda f=cli_file: self.import_playlist_from_file(f, silent=False))
 
         if self.app_config.get("auto_check_update", True):
             self.after(1500, lambda: check_for_updates(parent=self, silent=True))
@@ -1529,6 +1538,28 @@ class MediaDownloaderApp(ctk.CTk):
         )
         self.btn_clear_all.pack(side="right", padx=(6, 0))
 
+        self.btn_export_playlist = ctk.CTkButton(
+            tool_bar,
+            text=i18n.t("btn_export_playlist"),
+            width=85,
+            height=28,
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=self.export_playlist_dialog
+        )
+        self.btn_export_playlist.pack(side="right", padx=6)
+
+        self.btn_import_playlist = ctk.CTkButton(
+            tool_bar,
+            text=i18n.t("btn_import_playlist"),
+            width=85,
+            height=28,
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=self.import_playlist_dialog
+        )
+        self.btn_import_playlist.pack(side="right", padx=6)
+
         self.btn_deselect_all = ctk.CTkButton(
             tool_bar,
             text=i18n.t("btn_deselect_all"),
@@ -1798,6 +1829,8 @@ class MediaDownloaderApp(ctk.CTk):
         # 區塊 3: 清單
         self.btn_select_all.configure(text=i18n.t("btn_select_all"))
         self.btn_deselect_all.configure(text=i18n.t("btn_deselect_all"))
+        self.btn_import_playlist.configure(text=i18n.t("btn_import_playlist"))
+        self.btn_export_playlist.configure(text=i18n.t("btn_export_playlist"))
         self.btn_clear_all.configure(text=i18n.t("btn_clear_list"))
         self.btn_retry_failed.configure(text=i18n.t("btn_retry_failed"))
         self.lbl_empty.configure(text=i18n.t("lbl_empty_list"))
@@ -1950,6 +1983,13 @@ class MediaDownloaderApp(ctk.CTk):
             self._cli_quality(args)
         elif cmd in ("convert", "factory"):
             self.open_format_factory_dialog()
+        elif cmd in ("export", "exp"):
+            self.export_playlist_dialog()
+        elif cmd in ("import", "imp"):
+            if args:
+                self.import_playlist_from_file(" ".join(args))
+            else:
+                self.import_playlist_dialog()
         elif cmd in ("dir", "cd"):
             self._cli_dir(args)
         elif cmd == "usb":
@@ -1977,7 +2017,7 @@ class MediaDownloaderApp(ctk.CTk):
     def _cli_about(self):
         banner = (
             "=========================================================\n"
-            "  ⚡ StreamForge v1.0.0 (Release Build)\n"
+            "  ⚡ StreamForge v1.1.0 (Release Build)\n"
             "  High-Performance Media Stream & Audio Processing Utility\n\n"
             "  © 2026 The StreamForge Team & Contributors.\n"
             "  All Rights Reserved. 保留所有權利。\n\n"
@@ -1994,6 +2034,8 @@ class MediaDownloaderApp(ctk.CTk):
             "  update / check-update     : 檢查 StreamForge 最新版本與更新\n"
             "  add <網址> / a <網址>       : 加入單曲或播放清單網址至清單\n"
             "  paste / p                 : 從剪貼簿讀取網址並加入\n"
+            "  export / exp              : 匯出目前清單為 SFPL 或 M3U/TXT 播放清單檔案\n"
+            "  import [檔案] / imp       : 匯入 SFPL、JSON、M3U 或 TXT 播放清單\n"
             "  list / ls                 : 列出當前清單所有歌曲與下載狀態\n"
             "  select <all|none|編號...>  : 選取或反選 (如: select all, select 1 3)\n"
             "  del <all|編號...> / rm     : 從清單中刪除歌曲 (如: del 2, del all)\n"
@@ -2252,28 +2294,204 @@ class MediaDownloaderApp(ctk.CTk):
         )
         self.log(status_msg)
 
-    # ================= 隨身碟與資料夾編號智慧檢查 =================
+    # ================= 隨身碟動態即時偵測與熱插拔監控 =================
 
-    def _detect_usb_drives(self):
-        drives = downloader.get_removable_drives()
-        if drives:
-            self.btn_usb.configure(text=f"💾 隨身碟 ({drives[0][0]}:)")
-            self.log(f"💾 偵測到可用的隨身碟代號: {', '.join(drives)}")
-        else:
-            self.btn_usb.configure(text="💾 隨身碟")
+    def _poll_usb_drives(self):
+        """背景定時輪詢 Windows 隨身碟狀態，實現隨插即用動態偵測"""
+        try:
+            current_drives_list = downloader.get_removable_drives_detail()
+            current_drives = {d['letter']: d for d in current_drives_list}
+
+            old_letters = set(self._connected_usb_drives.keys())
+            new_letters = set(current_drives.keys())
+
+            # 偵測到新插入隨身碟
+            inserted = new_letters - old_letters
+            for l in inserted:
+                info = current_drives[l]
+                lbl = info.get('label') or '隨身碟'
+                free_gb = info.get('free_gb', 0)
+                tot_gb = info.get('total_gb', 0)
+                msg = f"🔌 [USB 動態偵測] 偵測到隨身碟插入: {info['path']} ({lbl} | 可用: {free_gb} GB / 總量: {tot_gb} GB)"
+                self.log(msg)
+                self.lbl_status.configure(text=f"🔌 已偵測到隨身碟: {info['path']} ({lbl})")
+
+            # 偵測到拔除隨身碟
+            removed = old_letters - new_letters
+            for l in removed:
+                old_info = self._connected_usb_drives.get(l, {})
+                old_path = old_info.get('path', f"{l}:\\")
+                msg = f"⚠️ [USB 動態偵測] 隨身碟已拔除: {old_path}"
+                self.log(msg)
+
+                # 若目前下載路徑剛好在此拔除的隨身碟上
+                current_dir = self.entry_dir.get().strip()
+                if current_dir.upper().startswith(f"{l}:"):
+                    self.entry_dir.delete(0, tk.END)
+                    self.entry_dir.insert(0, self.default_download_dir)
+                    self.inspect_folder_format(user_triggered=False)
+                    self.log(f"⚠️ 下載路徑原本所在的隨身碟 ({old_path}) 已被拔除！系統已自動安全切換回預設下載路徑：{self.default_download_dir}")
+                    messagebox.showwarning(
+                        "隨身碟已拔除",
+                        f"偵測到您原本設定的儲存路徑隨身碟 ({old_path}) 已被拔除！\n\n為避免下載寫入失敗，系統已自動安全切換回預設下載路徑：\n{self.default_download_dir}",
+                        parent=self
+                    )
+
+            # 更新記錄
+            self._connected_usb_drives = current_drives
+
+            # 更新按鈕外觀
+            if not current_drives_list:
+                self.btn_usb.configure(text="💾 隨身碟", fg_color="#334155")
+            elif len(current_drives_list) == 1:
+                single = current_drives_list[0]
+                self.btn_usb.configure(text=f"💾 隨身碟 ({single['letter']}: {single['free_gb']}G)", fg_color="#0369a1")
+            else:
+                self.btn_usb.configure(text=f"💾 隨身碟 ({len(current_drives_list)} 個)", fg_color="#0369a1")
+
+        except Exception:
+            pass
+        finally:
+            self.after(1500, self._poll_usb_drives)
 
     def quick_select_usb(self):
-        drives = downloader.get_removable_drives()
+        drives = downloader.get_removable_drives_detail()
         if not drives:
-            messagebox.showinfo("提示", "目前未偵測到插入的 USB 隨身碟！\n請插入隨身碟後再次點擊，或使用「瀏覽」按鈕手動選擇。")
+            messagebox.showinfo("提示", "目前未偵測到插入的 USB 隨身碟！\n\n請插入隨身碟後，系統將會自動動態偵測並顯示於按鈕上，或點選「瀏覽」手動選擇路徑。", parent=self)
             return
 
-        target = drives[0]
+        if len(drives) == 1:
+            target = drives[0]['path']
+            self.entry_dir.delete(0, tk.END)
+            self.entry_dir.insert(0, target)
+            self.lbl_status.configure(text=f"已選取隨身碟: {target}")
+            self.log(f"💾 已切換下載目標為隨身碟: {target} ({drives[0]['label']} | 可用空間: {drives[0]['free_gb']} GB)")
+            self.inspect_folder_format(user_triggered=False)
+        else:
+            # 多顆隨身碟時彈出選單讓使用者選取
+            menu = tk.Menu(self, tearoff=0, bg="#1e293b", fg="#f8fafc", activebackground="#0284c7", activeforeground="#ffffff", font=("Microsoft JhengHei UI", 10))
+            for d in drives:
+                label_text = f"{d['path']} [{d['label']}] (剩餘: {d['free_gb']} GB / 總: {d['total_gb']} GB)"
+                path = d['path']
+                menu.add_command(label=label_text, command=lambda p=path: self._set_target_dir(p))
+
+            x = self.btn_usb.winfo_rootx()
+            y = self.btn_usb.winfo_rooty() + self.btn_usb.winfo_height()
+            menu.tk_popup(x, y)
+
+    def _set_target_dir(self, path: str):
         self.entry_dir.delete(0, tk.END)
-        self.entry_dir.insert(0, target)
-        self.lbl_status.configure(text=f"已選取隨身碟: {target}")
-        self.log(f"已切換下載目標為隨身碟: {target}")
+        self.entry_dir.insert(0, path)
+        self.lbl_status.configure(text=f"已選取儲存目錄: {path}")
+        self.log(f"📁 已切換下載目標目錄為: {path}")
         self.inspect_folder_format(user_triggered=False)
+
+    # ================= 播放清單匯出與匯入 (SFPL / JSON / M3U / TXT) =================
+
+    def export_playlist_dialog(self):
+        """匯出目前的歌曲清單為 SFPL 或其他播放清單格式"""
+        if not self.songs:
+            messagebox.showwarning("提示", "目前歌曲清單為空，無法匯出！\n請先新增歌曲至清單中再點選匯出。", parent=self)
+            return
+
+        file_types = [
+            ("StreamForge 歌單檔案 (*.sfpl)", "*.sfpl"),
+            ("標準 JSON 格式 (*.json)", "*.json"),
+            ("M3U 擴展播放清單 (*.m3u8;*.m3u)", "*.m3u8;*.m3u"),
+            ("純文字網址清單 (*.txt)", "*.txt"),
+            ("所有檔案 (*.*)", "*.*")
+        ]
+
+        default_name = f"StreamForge_Playlist_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sfpl"
+        file_path = filedialog.asksaveasfilename(
+            parent=self,
+            title="匯出播放清單",
+            defaultextension=".sfpl",
+            initialfile=default_name,
+            filetypes=file_types
+        )
+        if not file_path:
+            return
+
+        extra_settings = {
+            "format": self.opt_format.get() if hasattr(self, 'opt_format') else "mp3",
+            "quality": self.opt_quality.get() if hasattr(self, 'opt_quality') else "320 kbps",
+            "numbering": bool(self.chk_numbering.get() if hasattr(self, 'chk_numbering') else False),
+        }
+
+        ok, msg = playlist.save_playlist(file_path, self.songs, playlist_name=os.path.splitext(os.path.basename(file_path))[0], extra_settings=extra_settings)
+        if ok:
+            self.log(f"📤 {msg} -> {file_path}")
+            messagebox.showinfo("匯出成功", f"🎉 播放清單已成功匯出！\n\n包含歌曲：{len(self.songs)} 首\n檔案路徑：\n{file_path}", parent=self)
+        else:
+            self.log(f"❌ 匯出播放清單失敗：{msg}")
+            messagebox.showerror("匯出失敗", f"無法儲存播放清單檔案：\n{msg}", parent=self)
+
+    def import_playlist_dialog(self):
+        """匯入播放清單檔案 (*.sfpl, *.json, *.m3u, *.txt)"""
+        if self.is_running:
+            messagebox.showwarning("提示", "下載任務執行中，無法匯入歌單！", parent=self)
+            return
+
+        file_types = [
+            ("支援的歌單格式 (*.sfpl;*.json;*.m3u8;*.m3u;*.txt)", "*.sfpl;*.json;*.m3u8;*.m3u;*.txt"),
+            ("StreamForge 歌單檔案 (*.sfpl)", "*.sfpl"),
+            ("標準 JSON 格式 (*.json)", "*.json"),
+            ("M3U 擴展播放清單 (*.m3u8;*.m3u)", "*.m3u8;*.m3u"),
+            ("純文字網址清單 (*.txt)", "*.txt"),
+            ("所有檔案 (*.*)", "*.*")
+        ]
+
+        file_path = filedialog.askopenfilename(
+            parent=self,
+            title="選取要匯入的播放清單檔案",
+            filetypes=file_types
+        )
+        if not file_path:
+            return
+
+        self.import_playlist_from_file(file_path, silent=False)
+
+    def import_playlist_from_file(self, file_path: str, silent: bool = False):
+        """從指定檔案解析並載入播放清單"""
+        ok, tracks, msg = playlist.load_playlist(file_path)
+        if not ok or not tracks:
+            if not silent:
+                messagebox.showerror("匯入失敗", f"無法載入該播放清單：\n{msg}", parent=self)
+            self.log(f"❌ 匯入歌單失敗 ({file_path}): {msg}")
+            return
+
+        existing_urls = {s.get('url', '').strip().lower() for s in self.songs if s.get('url')}
+        existing_ids = {s.get('id', '').strip() for s in self.songs if s.get('id')}
+
+        added_count = 0
+        skipped_count = 0
+
+        for t in tracks:
+            t_url = t.get('url', '').strip()
+            t_id = t.get('id', '').strip()
+
+            # 避免重複匯入相同網址或 ID
+            if (t_url and t_url.lower() in existing_urls) or (t_id and t_id in existing_ids):
+                skipped_count += 1
+                continue
+
+            self.songs.append(t)
+            self.render_song_row(t)
+            if t_url:
+                existing_urls.add(t_url.lower())
+            if t_id:
+                existing_ids.add(t_id)
+            added_count += 1
+
+        self.update_stats()
+        filename = os.path.basename(file_path)
+        log_text = f"📥 成功匯入播放清單 [{filename}]：成功新增 {added_count} 首，略過已存在 {skipped_count} 首"
+        self.log(log_text)
+
+        if not silent:
+            info_msg = f"🎉 歌單匯入成功！\n\n來源檔案：{filename}\n成功新增：{added_count} 首\n略過重複：{skipped_count} 首\n目前清單總計：{len(self.songs)} 首"
+            messagebox.showinfo("匯入成功", info_msg, parent=self)
 
     def _on_numbering_toggled(self):
         if self.chk_numbering.get():

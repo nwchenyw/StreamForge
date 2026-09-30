@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # ⚡ StreamForge
 ### Taller Multimedia de Alto Rendimiento · Conversión de Formatos y Gestión Inteligente de Nombres
@@ -15,7 +15,7 @@
   <a href="README.de.md"><b>Deutsch</b></a>
 </p>
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
@@ -83,7 +83,7 @@ Puede interactuar completamente por teclado ingresando comandos en el **`💻 Te
 ## 🚀 Instalación y Descargas (Installation & Releases)
 
 ### 1. Instalador nativo para Windows (Recomendado)
-Descargue **`StreamForge-Setup-v1.0.0.exe`** desde la sección [Releases](https://github.com/nwchenyw/StreamForge/releases):
+Descargue **`StreamForge-Setup-v1.1.0.exe`** desde la sección [Releases](https://github.com/nwchenyw/StreamForge/releases):
 - Asistente de instalación nativo en 8 idiomas.
 - Instalación limpia sin scripts innecesarios, con desinstalador estándar.
 

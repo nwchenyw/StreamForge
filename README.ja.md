@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # ⚡ StreamForge
 ### 高性能ストリーミングメディア工房 · 形式変換＆スマート連番管理ツール
@@ -15,7 +15,7 @@
   <a href="README.de.md"><b>Deutsch</b></a>
 </p>
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/nwchenyw/StreamForge/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0284c7?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-f59e0b?style=for-the-badge&logo=python)](https://python.org)
@@ -86,7 +86,7 @@
 ## 🚀 ダウンロードとインストール (Installation & Releases)
 
 ### 1. Windows インストーラー (推奨)
-[Releases ページ](https://github.com/nwchenyw/StreamForge/releases) から最新の **`StreamForge-Setup-v1.0.0.exe`** をダウンロードしてください：
+[Releases ページ](https://github.com/nwchenyw/StreamForge/releases) から最新の **`StreamForge-Setup-v1.1.0.exe`** をダウンロードしてください：
 - **8ヶ国語ウィザード**: インストール開始時に日本語を含む 8 言語から選択可能。
 - **インストール先の自由選択**: 標準パス、外部ドライブ、USB メモリなど自由な場所に導入可能。
 - **自動アップデート確認**: 起動時の最新版確認をいつでも設定可能。
