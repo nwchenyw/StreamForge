@@ -47,7 +47,7 @@ CreateUninstallRegKey=yes
 Uninstallable=yes
 UninstallDisplayIcon={app}\assets\app_icon.ico
 UninstallDisplayName={#MyAppName}
-CloseApplications=force
+CloseApplications=no
 RestartApplications=no
 ChangesAssociations=yes
 
@@ -74,6 +74,9 @@ chinesetraditional.MaintenanceRepair=🛠️ 修復安裝 (Repair) - 快速修�
 chinesetraditional.MaintenanceUninstall=🗑️ 移除軟體 (Uninstall) - 從本電腦中完整解除安裝 StreamForge
 chinesetraditional.ConfirmUninstall=您確定要立即啟動解除安裝精靈，從電腦中移除 StreamForge 嗎？
 chinesetraditional.RepairFinished=StreamForge 程式檔案已成功修復並還原！
+chinesetraditional.AppRunningUninstallPrompt=偵測到 StreamForge 正在執行中！%n%n為了安全解除安裝，必須先關閉正在運行的程式。%n請問您是否要立即中斷並關閉 StreamForge？%n%n• 點選【是 (Yes)】：關閉程式並繼續解除安裝%n• 點選【否 (No)】：取消解除安裝（不中斷就不刪除任何檔案）
+chinesetraditional.UninstallAbortedByUser=您已取消解除安裝。StreamForge 仍保持完整，未刪除任何檔案。
+chinesetraditional.AppRunningSetupPrompt=偵測到 StreamForge 正在執行中！%n%n安裝程式需要先關閉正在運行的程式才能繼續更新或安裝檔案。%n請問您是否要立即中斷並關閉 StreamForge？%n%n• 點選【是 (Yes)】：關閉程式並繼續安裝%n• 點選【否 (No)】：取消安裝
 
 english.CreateDesktopIcon=Create desktop shortcut
 english.LaunchProgram=Launch StreamForge now
@@ -87,6 +90,9 @@ english.MaintenanceRepair=🛠️ Repair - Restore and repair missing or corrupt
 english.MaintenanceUninstall=🗑️ Uninstall - Completely remove StreamForge from this computer
 english.ConfirmUninstall=Are you sure you want to launch the uninstaller and remove StreamForge from your computer?
 english.RepairFinished=StreamForge program files have been successfully repaired and restored!
+english.AppRunningUninstallPrompt=StreamForge is currently running!%n%nTo uninstall safely, the running application must be closed.%nWould you like to terminate StreamForge now?%n%n• Click [Yes]: Close the application and proceed with uninstallation%n• Click [No]: Cancel uninstallation (no files will be deleted)
+english.UninstallAbortedByUser=Uninstallation cancelled. StreamForge remains intact and no files were deleted.
+english.AppRunningSetupPrompt=StreamForge is currently running!%n%nSetup needs to close the running application to update or install files.%nWould you like to terminate StreamForge now?%n%n• Click [Yes]: Close the application and continue setup%n• Click [No]: Cancel setup
 
 chinesesimplified.CreateDesktopIcon=创建桌面快捷方式 (&Create desktop shortcut)
 chinesesimplified.LaunchProgram=立即启动 StreamForge
@@ -100,6 +106,9 @@ chinesesimplified.MaintenanceRepair=🛠️ 修复安装 (Repair) - 快速修复
 chinesesimplified.MaintenanceUninstall=🗑️ 卸载软件 (Uninstall) - 从本电脑中完整卸载 StreamForge
 chinesesimplified.ConfirmUninstall=您确定要立即启动卸载向导，从计算机中移除 StreamForge 吗？
 chinesesimplified.RepairFinished=StreamForge 程序文件已成功修复并还原！
+chinesesimplified.AppRunningUninstallPrompt=检测到 StreamForge 正在运行中！%n%n为了安全卸载，必须先关闭正在运行的程序。%n请问您是否要立即中断并关闭 StreamForge？%n%n• 点击【是 (Yes)】：关闭程序并继续卸载%n• 点击【否 (No)】：取消卸载（不中断就不删除任何文件）
+chinesesimplified.UninstallAbortedByUser=您已取消卸载。StreamForge 仍保持完整，未删除任何文件。
+chinesesimplified.AppRunningSetupPrompt=检测到 StreamForge 正在运行中！%n%n安装程序需要先关闭正在运行的程序才能继续更新或安装文件。%n请问您是否要立即中断并关闭 StreamForge？%n%n• 点击【是 (Yes)】：关闭程序并继续安装%n• 点击【否 (No)】：取消安装
 
 japanese.CreateDesktopIcon=デスクトップにショートカットを作成する (&Create desktop shortcut)
 japanese.LaunchProgram=StreamForge を今すぐ起動
@@ -113,6 +122,9 @@ japanese.MaintenanceRepair=🛠️ 修復 (Repair) - 破損または欠落して
 japanese.MaintenanceUninstall=🗑️ アンインストール (Uninstall) - コンピューターから StreamForge を完全に削除します
 japanese.ConfirmUninstall=アンインストーラーを起動して StreamForge をコンピューターから削除してもよろしいですか？
 japanese.RepairFinished=StreamForge プログラムファイルは正常に修復および復元されました！
+japanese.AppRunningUninstallPrompt=StreamForge が現在実行中です！%n%n安全にアンインストールするには、実行中のアプリケーションを終了する必要があります。%nStreamForge を今すぐ終了しますか？%n%n• [はい (Yes)] をクリック：アプリを終了してアンインストールを続行します%n• [いいえ (No)] をクリック：アンインストールをキャンセルします（ファイルは削除されません）
+japanese.UninstallAbortedByUser=アンインストールはキャンセルされました。StreamForge はそのまま保持され、ファイルは削除されていません。
+japanese.AppRunningSetupPrompt=StreamForge が現在実行中です！%n%nファイルを更新またはインストールするには、実行中のアプリを閉じる必要があります。%nStreamForge を今すぐ終了しますか？%n%n• [はい (Yes)] をクリック：アプリを終了してインストールを続行します%n• [いいえ (No)] をクリック：インストールをキャンセルします
 
 korean.CreateDesktopIcon=바탕 화면 바로가기 만들기 (&Create desktop shortcut)
 korean.LaunchProgram=지금 StreamForge 실행
@@ -126,6 +138,9 @@ korean.MaintenanceRepair=🛠️ 복구 (Repair) - 프로그램 파일을 빠르
 korean.MaintenanceUninstall=🗑️ 제거 (Uninstall) - 컴퓨터에서 StreamForge를 완전히 제거합니다
 korean.ConfirmUninstall=제거 프로그램을 시작하여 컴퓨터에서 StreamForge를 제거하시겠습니까?
 korean.RepairFinished=StreamForge 프로그램 파일이 성공적으로 복구 및 복원되었습니다!
+korean.AppRunningUninstallPrompt=StreamForge가 현재 실행 중입니다!%n%n안전하게 제거하려면 실행 중인 응용 프로그램을 닫아야 합니다.%n지금 StreamForge를 종료하시겠습니까?%n%n• [예 (Yes)] 클릭: 앱을 종료하고 제거를 계속합니다%n• [아니요 (No)] 클릭: 제거를 취소합니다 (파일이 삭제되지 않습니다)
+korean.UninstallAbortedByUser=제거가 취소되었습니다. StreamForge는 그대로 유지되며 파일이 삭제되지 않았습니다.
+korean.AppRunningSetupPrompt=StreamForge가 현재 실행 중입니다!%n%n파일을 업데이트하거나 설치하려면 실행 중인 앱을 닫아야 합니다.%n지금 StreamForge를 종료하시겠습니까?%n%n• [예 (Yes)] 클릭: 앱을 종료하고 설치를 계속합니다%n• [아니요 (No)] 클릭: 설치를 취소합니다
 
 spanish.CreateDesktopIcon=Crear un acceso directo en el escritorio (&Create desktop shortcut)
 spanish.LaunchProgram=Iniciar StreamForge ahora
@@ -139,6 +154,9 @@ spanish.MaintenanceRepair=🛠️ Reparar - Reparar y restaurar archivos dañado
 spanish.MaintenanceUninstall=🗑️ Desinstalar - Desinstalar completamente StreamForge del equipo
 spanish.ConfirmUninstall=¿Está seguro de que desea iniciar el desinstalador y eliminar StreamForge del equipo?
 spanish.RepairFinished=¡Los archivos de StreamForge se han reparado y restaurado correctamente!
+spanish.AppRunningUninstallPrompt=¡StreamForge se está ejecutando actualmente!%n%nPara desinstalar de forma segura, se debe cerrar la aplicación en ejecución.%n¿Desea cerrar StreamForge ahora?%n%n• Haga clic en [Sí]: Cerrar la aplicación y continuar con la desinstalación%n• Haga clic en [No]: Cancelar la desinstalación (no se eliminará ningún archivo)
+spanish.UninstallAbortedByUser=Desinstalación cancelada. StreamForge permanece intacto y no se eliminaron archivos.
+spanish.AppRunningSetupPrompt=¡StreamForge se está ejecutando actualmente!%n%nEl instalador necesita cerrar la aplicación para actualizar o instalar archivos.%n¿Desea cerrar StreamForge ahora?%n%n• Haga clic en [Sí]: Cerrar la aplicación y continuar con la instalación%n• Haga clic en [No]: Cancelar la instalación
 
 french.CreateDesktopIcon=Créer un raccourci sur le Bureau (&Create desktop shortcut)
 french.LaunchProgram=Lancer StreamForge maintenant
@@ -152,6 +170,9 @@ french.MaintenanceRepair=🛠️ Réparer - Réparer et restaurer les fichiers e
 french.MaintenanceUninstall=🗑️ Désinstaller - Supprimer complètement StreamForge de cet ordinateur
 french.ConfirmUninstall=Êtes-vous sûr de vouloir lancer le désinstallateur et supprimer StreamForge de cet ordinateur ?
 french.RepairFinished=Les fichiers du programme StreamForge ont été réparés et restaurés avec succès !
+french.AppRunningUninstallPrompt=StreamForge est actuellement en cours d'exécution !%n%nPour désinstaller en toute sécurité, l'application doit être fermée.%nVoulez-vous fermer StreamForge maintenant ?%n%n• Cliquez sur [Oui] : Fermer l'application et poursuivre la désinstallation%n• Cliquez sur [Non] : Annuler la désinstallation (aucun fichier ne sera supprimé)
+french.UninstallAbortedByUser=Désinstallation annulée. StreamForge reste intact et aucun fichier n'a été supprimé.
+french.AppRunningSetupPrompt=StreamForge est actuellement en cours d'exécution !%n%nL'assistant d'installation doit fermer l'application pour mettre à jour ou installer des fichiers.%nVoulez-vous fermer StreamForge maintenant ?%n%n• Cliquez sur [Oui] : Fermer l'application et continuer l'installation%n• Cliquez sur [Non] : Annuler l'installation
 
 german.CreateDesktopIcon=Desktop-Verknüpfung erstellen (&Create desktop shortcut)
 german.LaunchProgram=StreamForge jetzt starten
@@ -165,6 +186,9 @@ german.MaintenanceRepair=🛠️ Reparieren - Dateien reparieren und wiederherst
 german.MaintenanceUninstall=🗑️ Deinstallieren - StreamForge vollständig von diesem Computer entfernen
 german.ConfirmUninstall=Möchten Sie das Deinstallationsprogramm wirklich starten und StreamForge von Ihrem Computer entfernen?
 german.RepairFinished=StreamForge-Programmdateien wurden erfolgreich repariert und wiederhergestellt!
+german.AppRunningUninstallPrompt=StreamForge wird derzeit ausgeführt!%n%nUm sicher zu deinstallieren, muss die ausgeführte Anwendung geschlossen werden.%nMöchten Sie StreamForge jetzt beenden?%n%n• Klicken Sie auf [Ja]: Anwendung beenden und mit der Deinstallation fortfahren%n• Klicken Sie auf [Nein]: Deinstallation abbrechen (es werden keine Dateien gelöscht)
+german.UninstallAbortedByUser=Deinstallation abgebrochen. StreamForge bleibt unverändert und es wurden keine Dateien gelöscht.
+german.AppRunningSetupPrompt=StreamForge wird derzeit ausgeführt!%n%nDas Setup muss die laufende Anwendung schließen, um Dateien zu aktualisieren oder zu installieren.%nMöchten Sie StreamForge jetzt beenden?%n%n• Klicken Sie auf [Ja]: Anwendung beenden und mit dem Setup fortfahren%n• Klicken Sie auf [Nein]: Setup abbrechen
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -193,6 +217,73 @@ Type: dirifempty; Name: "{app}"
 
 [Code]
 procedure ExitProcess(uExitCode: Integer); external 'ExitProcess@kernel32.dll stdcall';
+
+function IsAppRunning(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  if Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq {#MyAppExeName}" 2>nul | find /i "{#MyAppExeName}" >nul', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Result := (ResultCode = 0)
+  else
+    Result := False;
+end;
+
+procedure KillApp();
+var
+  ResultCode: Integer;
+  WaitCount: Integer;
+begin
+  Exec('taskkill.exe', '/f /im {#MyAppExeName} /im ffmpeg.exe /im ffprobe.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  WaitCount := 0;
+  while IsAppRunning and (WaitCount < 15) do
+  begin
+    Sleep(200);
+    WaitCount := WaitCount + 1;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  PromptMsg: string;
+begin
+  Result := True;
+  if IsAppRunning then
+  begin
+    PromptMsg := CustomMessage('AppRunningSetupPrompt');
+    if MsgBox(PromptMsg, mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      KillApp;
+      Result := True;
+    end
+    else
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  PromptMsg: string;
+begin
+  Result := True;
+  if IsAppRunning then
+  begin
+    PromptMsg := CustomMessage('AppRunningUninstallPrompt');
+    if MsgBox(PromptMsg, mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      KillApp;
+      Result := True;
+    end
+    else
+    begin
+      MsgBox(CustomMessage('UninstallAbortedByUser'), mbInformation, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end;
+end;
 
 var
   MaintenancePage: TInputOptionWizardPage;
