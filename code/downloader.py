@@ -325,10 +325,10 @@ def parse_youtube_urls(raw_input: str) -> List[str]:
             urls.append(line)
     return urls
 
-def extract_single_url_info(url: str) -> List[Dict]:
+def extract_single_url_info(url: str, max_items: Optional[int] = None) -> List[Dict]:
     """
     解析單一網址（可以是單曲或播放清單）
-    回傳提取到的歌曲清單
+    回傳提取到的歌曲清單。預設無上限（擷取完整清單），亦可透過 max_items 指定上限。
     """
     ydl_opts = {
         'extract_flat': True,
@@ -337,13 +337,14 @@ def extract_single_url_info(url: str) -> List[Dict]:
         'quiet': True,
         'no_warnings': True,
         'no_color': True,
-        'socket_timeout': 10,
+        'socket_timeout': 15,
         'geo_bypass': True,
-        'retries': 2,
-        'playlistend': 100,
+        'retries': 3,
         'js_runtimes': {'node': {}},
         'remote_components': ['ejs:github'],
     }
+    if max_items:
+        ydl_opts['playlistend'] = max_items
 
     items = []
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
