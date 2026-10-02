@@ -82,3 +82,39 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+      - name: Sync Release & Package to Tools Server
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          SERVER_URL: https://tools.nwchenyw.com/api/v1/webhook/github-release
+          SYNC_SECRET: ${{ secrets.RELEASE_WEBHOOK_SECRET || 'sf_release_sync_nwchenyw_2026_sec' }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag.TrimStart("v")
+          $setupFile = Get-ChildItem -Path "installer" -Filter "StreamForge-Setup-*.exe" | Select-Object -First 1
+          $zipFile = Get-ChildItem -Path "installer" -Filter "StreamForge-*-Portable.zip" | Select-Object -First 1
+          $setupHash = (Get-FileHash -Path $setupFile.FullName -Algorithm SHA256).Hash
+
+          $body = @{
+            app = "streamforge"
+            version = $ver
+            tag = $tag
+            title = "StreamForge $tag 更新發布"
+            download_url = "https://github.com/nwchenyw/StreamForge/releases/download/$tag/$($setupFile.Name)"
+            portable_url = "https://github.com/nwchenyw/StreamForge/releases/download/$tag/$($zipFile.Name)"
+            checksum_sha256 = $setupHash
+            changelog_url = "https://github.com/nwchenyw/StreamForge/releases/tag/$tag"
+          } | ConvertTo-Json -Compress
+
+          Write-Host "Syncing release to $env:SERVER_URL for version $ver..."
+          try {
+            $resp = Invoke-RestMethod -Uri $env:SERVER_URL -Method Post -Headers @{
+              "Authorization" = "Bearer $env:SYNC_SECRET"
+              "Content-Type" = "application/json"
+            } -Body $body
+            Write-Host "Success: $($resp | ConvertTo-Json -Depth 5)"
+          } catch {
+            Write-Host "Notice: Release sync response: $_"
+          }
+

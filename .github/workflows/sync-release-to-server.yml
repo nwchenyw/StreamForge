@@ -1,0 +1,43 @@
+name: Sync Release to Tools Server
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to sync (e.g. v1.1.0)'
+        required: true
+        default: 'v1.1.0'
+
+permissions:
+  contents: read
+
+jobs:
+  sync-to-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Release Webhook to Server
+        env:
+          SERVER_URL: https://tools.nwchenyw.com/api/v1/webhook/github-release
+          SYNC_SECRET: ${{ secrets.RELEASE_WEBHOOK_SECRET || 'sf_release_sync_nwchenyw_2026_sec' }}
+          EVENT_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          RELEASE_TITLE: ${{ github.event.release.name || github.event.inputs.tag }}
+          HTML_URL: ${{ github.event.release.html_url || '' }}
+        run: |
+          TAG="${EVENT_TAG:-v1.1.0}"
+          VER="${TAG#v}"
+          echo "Syncing release $TAG (v$VER) to Tools Server..."
+          
+          curl -s -X POST "$SERVER_URL" \
+            -H "Authorization: Bearer $SYNC_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"app\": \"streamforge\",
+              \"version\": \"$VER\",
+              \"tag\": \"$TAG\",
+              \"title\": \"${RELEASE_TITLE:-StreamForge $TAG 更新發布}\",
+              \"download_url\": \"https://github.com/nwchenyw/StreamForge/releases/download/$TAG/StreamForge-Setup-$TAG.exe\",
+              \"portable_url\": \"https://github.com/nwchenyw/StreamForge/releases/download/$TAG/StreamForge-$TAG-Portable.zip\",
+              \"changelog_url\": \"${HTML_URL:-https://github.com/nwchenyw/StreamForge/releases/tag/$TAG}\"
+            }" | jq .
