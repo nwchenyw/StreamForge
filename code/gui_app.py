@@ -101,6 +101,7 @@ def get_windows_user_downloads_dir() -> str:
 # ================= 設定檔與更新檢查 =================
 APP_VERSION = "1.1.0"
 GITHUB_REPO = "nwchenyw/StreamForge"
+TOOLS_UPDATE_API = "https://tools.nwchenyw.com/api/v1/apps/streamforge/check-update"
 GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
 
@@ -201,8 +202,53 @@ def get_install_date_str() -> str:
 
 
 def check_for_updates(parent=None, silent=False):
-    """在背景執行緒中檢查 GitHub 最新版本"""
+    """在背景執行緒中優先向 tools.nwchenyw.com 官方發布中心檢查最新版本，失敗時降級回 GitHub"""
     def _worker():
+        def parse_v(v_str):
+            parts = []
+            for p in v_str.split("."):
+                try:
+                    parts.append(int(p))
+                except ValueError:
+                    parts.append(0)
+            return parts
+
+        curr_v = parse_v(APP_VERSION)
+
+        # 1. 優先嘗試官方 tools.nwchenyw.com API
+        try:
+            req = urllib.request.Request(
+                f"{TOOLS_UPDATE_API}?current_version={APP_VERSION}",
+                headers={
+                    "User-Agent": "StreamForge-Desktop-App",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    raw_tag = data.get("version", "").lstrip("v")
+                    html_url = data.get("webUrl", "https://tools.nwchenyw.com/streamforge")
+                    direct_exe_url = data.get("downloadUrl", "https://tools.nwchenyw.com/api/v1/apps/streamforge/download/latest")
+                    update_avail = data.get("updateAvailable", False)
+                    latest_v = parse_v(raw_tag) if raw_tag else []
+
+                    if update_avail or (latest_v and latest_v > curr_v):
+                        if parent and parent.winfo_exists():
+                            parent.after(0, lambda: _prompt_update(parent, raw_tag, html_url, direct_exe_url))
+                        return
+                    else:
+                        if not silent and parent and parent.winfo_exists():
+                            parent.after(0, lambda: messagebox.showinfo(
+                                "版本檢查",
+                                f"🎉 目前已是最新版本 (v{APP_VERSION})！\n由官方中心 tools.nwchenyw.com 提供驗證。"
+                            ))
+                        return
+        except Exception:
+            pass  # 官方中心離線時，自動回退到 GitHub
+
+        # 2. 備援嘗試：官方 GitHub Releases API
         try:
             req = urllib.request.Request(
                 GITHUB_RELEASES_API,
@@ -217,18 +263,7 @@ def check_for_updates(parent=None, silent=False):
                     data = json.loads(resp.read().decode("utf-8"))
                     raw_tag = data.get("tag_name", "").lstrip("v")
                     html_url = data.get("html_url", GITHUB_RELEASES_URL)
-
-                    def parse_v(v_str):
-                        parts = []
-                        for p in v_str.split("."):
-                            try:
-                                parts.append(int(p))
-                            except ValueError:
-                                parts.append(0)
-                        return parts
-
                     latest_v = parse_v(raw_tag) if raw_tag else []
-                    curr_v = parse_v(APP_VERSION)
 
                     # 尋找直接下載的安裝檔網址 (.exe)
                     direct_exe_url = None
@@ -252,7 +287,7 @@ def check_for_updates(parent=None, silent=False):
             if not silent and parent and parent.winfo_exists():
                 parent.after(0, lambda: messagebox.showinfo(
                     "檢查更新提示",
-                    f"目前使用版本：v{APP_VERSION}\n若要獲取最新發布安裝檔或原始碼，請前往官方 GitHub Releases 頁面。"
+                    f"目前使用版本：v{APP_VERSION}\n若要獲取最新發布安裝檔或原始碼，請前往官方發布中心 tools.nwchenyw.com 或 GitHub Releases 頁面。"
                 ))
 
     t = threading.Thread(target=_worker, daemon=True)
